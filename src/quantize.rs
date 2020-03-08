@@ -10,15 +10,25 @@ use crate::error::Error;
 #[repr(C)]
 #[derive(Clone,Copy)]
 pub struct Color {
-    r: c_uchar,
-    g: c_uchar,
-    b: c_uchar,
-    a: c_uchar,
+    pub r: c_uchar,
+    pub g: c_uchar,
+    pub b: c_uchar,
+    pub a: c_uchar,
 }
 
 impl Default for Color {
     fn default() -> Self {
         Self{r:0, g:0, b:0, a:0}
+    }
+}
+
+impl Color {
+    pub fn new(r: c_uchar, g: c_uchar, b: c_uchar, a: c_uchar) -> Self {
+        Self{r: r, g: g, b: b, a: a}
+    }
+
+    pub fn as_slice(&self) -> [c_uchar; 4] {
+        [self.r, self.g, self.b, self.a]
     }
 }
 
@@ -61,7 +71,7 @@ impl QuantizeResult {
         let mut clusters = Vec::<Cluster>::with_capacity(attr.max_colors as usize);
 
         let mut root = Cluster::populate(image.width*image.height);
-        root.set_color_range(image);
+        root.calc_mean_and_range(image);
 
         if root.chan_range > 0 {
             heap.push(root);
@@ -77,8 +87,10 @@ impl QuantizeResult {
                 None => break,
             };
 
-            let median = to_split.median(image);
-            let (mut c1, mut c2) = to_split.split(median, image);
+            let (mut c1, mut c2) = to_split.split(image);
+
+            c1.calc_mean_and_range(image);
+            c2.calc_mean_and_range(image);
 
             if c1.indexes.is_empty() {
                 clusters.push(c2);
@@ -101,9 +113,6 @@ impl QuantizeResult {
                 break
             }
 
-            c1.set_color_range(image);
-            c2.set_color_range(image);
-
             if c1.chan_range > 0 {
                 heap.push(c1);
             } else {
@@ -117,37 +126,18 @@ impl QuantizeResult {
             }
         }
 
-        res.generate_palette(&clusters, image);
+        res.generate_palette(&clusters);
 
         res
     }
 
-    fn generate_palette(&mut self, clusters: &Vec<Cluster>, image: &Image) {
-        let image_data = image.data.deref();
+    fn generate_palette(&mut self, clusters: &Vec<Cluster>) {
         let mut palette = unsafe { &mut *self.palette };
 
         palette.count = clusters.len() as u32;
 
         for (i, cl) in clusters.iter().enumerate() {
-            let mut rsum: u64 = 0;
-            let mut gsum: u64 = 0;
-            let mut bsum: u64 = 0;
-            let mut asum: u64 = 0;
-
-            for ind in cl.indexes.iter() {
-                rsum += image_data[ind*4 + 0] as u64;
-                gsum += image_data[ind*4 + 1] as u64;
-                bsum += image_data[ind*4 + 2] as u64;
-                asum += image_data[ind*4 + 3] as u64;
-            }
-
-            let count = cl.indexes.len() as u64;
-            palette.entries[i] = Color{
-                r: (rsum / count) as c_uchar,
-                g: (gsum / count) as c_uchar,
-                b: (bsum / count) as c_uchar,
-                a: (asum / count) as c_uchar,
-            }
+            palette.entries[i] = cl.mean
         }
     }
 

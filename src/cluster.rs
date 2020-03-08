@@ -3,13 +3,14 @@ use std::ops::Deref;
 use std::os::raw::c_uchar;
 
 use crate::image::Image;
+use crate::quantize::Color;
 
 #[repr(C)]
-#[derive(Eq)]
 pub struct Cluster {
     pub indexes: Vec<usize>,
-    widest_chan: u8,
+    pub mean: Color,
     pub chan_range: c_uchar,
+    widest_chan: u8,
 }
 
 impl Ord for Cluster {
@@ -27,6 +28,8 @@ impl PartialOrd for Cluster {
     }
 }
 
+impl Eq for Cluster {}
+
 impl PartialEq for Cluster {
     fn eq(&self, other: &Self) -> bool {
         self.chan_range == other.chan_range &&
@@ -40,6 +43,7 @@ impl Cluster {
             indexes: indexes,
             widest_chan: 0,
             chan_range: 0,
+            mean: Color::default(),
         }
     }
 
@@ -53,67 +57,52 @@ impl Cluster {
         Self::new(indexes)
     }
 
-    pub fn set_color_range(&mut self, image: &Image) {
+    pub fn calc_mean_and_range(&mut self, image: &Image) {
+        if self.indexes.is_empty() {
+            self.mean = Color::default();
+            self.chan_range = 0;
+            return
+        }
+
+        self.calc_mean(image);
+
         let image_data = image.data.deref();
 
-        let mut min_by_chan: [c_uchar; 4] = [255; 4];
-        let mut max_by_chan: [c_uchar; 4] = [0; 4];
+        let mut max_diff: [c_uchar; 4] = [0; 4];
+        let mean = self.mean.as_slice();
 
         for ind in self.indexes.iter() {
-            for ch in 0..=3 {
-                let val = image_data[ind*4 + ch as usize];
+            for ch in 0..=3usize {
+                let val = image_data[ind*4 + ch];
+                let d = diff(val, mean[ch]);
 
-                if val < min_by_chan[ch as usize] {
-                    min_by_chan[ch as usize] = val
-                }
-                if val > max_by_chan[ch as usize] {
-                    max_by_chan[ch as usize] = val
+                if d > max_diff[ch] {
+                    max_diff[ch] = d
                 }
             }
         }
 
         let mut chan = 0;
-        let mut min = min_by_chan[0];
-        let mut max = max_by_chan[0];
+        let mut max = max_diff[0];
 
-        for ch in 0..=3 {
-            let min_val = min_by_chan[ch as usize];
-            let max_val = max_by_chan[ch as usize];
+        for ch in 0..=3usize {
+            let max_val = max_diff[ch];
 
-            if max_val - min_val > max-min {
+            if max_val > max {
                 chan = ch;
-                min = min_val;
                 max = max_val;
             }
         }
 
-        self.widest_chan = chan;
-        self.chan_range = max - min;
+        self.widest_chan = chan as u8;
+        self.chan_range = max;
     }
 
-    pub fn median(&mut self, image: &Image) -> c_uchar {
+    pub fn split(&mut self, image: &Image) -> (Cluster, Cluster) {
         let image_data = image.data.deref();
 
-        let mut values = Vec::<c_uchar>::with_capacity(self.indexes.len());
-
-        for ind in self.indexes.iter() {
-            values.push(image_data[ind*4 + self.widest_chan as usize]);
-        }
-
-        values.sort();
-
-        let half = values.len() / 2;
-        let mut median = values[half] as u16;
-
-        if values.len() % 2 == 0 {
-            median = (median + values[half-1] as u16) / 2;
-        }
-
-        return median as c_uchar;
-    }
-
-    pub fn split(&mut self, median: c_uchar, image: &Image) -> (Cluster, Cluster) {
-        let image_data = image.data.deref();
+        let mean = self.mean.as_slice();
+        let widest_chan = self.widest_chan as usize;
 
         let mut i: usize = 0;
         let mut lt: usize = 0;
@@ -121,15 +110,15 @@ impl Cluster {
 
         while i <= gt {
             let ind = self.indexes[i];
-            let val = image_data[ind*4 + self.widest_chan as usize];
+            let val = image_data[ind*4 + widest_chan];
 
-            if val < median {
+            if val < mean[widest_chan] {
                 if lt != i {
                     self.indexes.swap(lt, i);
                 }
                 lt += 1;
                 i += 1;
-            } else if val > median {
+            } else if val > mean[widest_chan] {
                 self.indexes.swap(gt, i);
                 gt -= 1;
             } else {
@@ -146,4 +135,37 @@ impl Cluster {
 
         (Self::new(sp1.to_vec()), Self::new(sp2.to_vec()))
     }
+
+    fn calc_mean(&mut self, image: &Image) {
+        let image_data = image.data.deref();
+
+        let mut rsum: usize = 0;
+        let mut gsum: usize = 0;
+        let mut bsum: usize = 0;
+        let mut asum: usize = 0;
+
+        for ind in self.indexes.iter() {
+            rsum += image_data[ind*4 + 0] as usize;
+            gsum += image_data[ind*4 + 1] as usize;
+            bsum += image_data[ind*4 + 2] as usize;
+            asum += image_data[ind*4 + 3] as usize;
+        }
+
+        let count = self.indexes.len();
+
+        self.mean = Color::new(
+            (rsum / count) as c_uchar,
+            (gsum / count) as c_uchar,
+            (bsum / count) as c_uchar,
+            (asum / count) as c_uchar,
+        )
+    }
+}
+
+fn diff(a: c_uchar, b: c_uchar) -> c_uchar {
+    if a > b {
+        return a - b
+    }
+
+    b - a
 }
