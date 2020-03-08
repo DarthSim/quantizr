@@ -14,8 +14,8 @@ pub struct Cluster {
 
 impl Ord for Cluster {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.indexes.len().cmp(&other.indexes.len()) {
-            Ordering::Equal => self.chan_range.cmp(&other.chan_range),
+        match self.chan_range.cmp(&other.chan_range) {
+            Ordering::Equal => self.indexes.len().cmp(&other.indexes.len()),
             o => o,
         }
     }
@@ -29,8 +29,8 @@ impl PartialOrd for Cluster {
 
 impl PartialEq for Cluster {
     fn eq(&self, other: &Self) -> bool {
-        self.indexes.len() == other.indexes.len() &&
-            self.chan_range == other.chan_range
+        self.chan_range == other.chan_range &&
+            self.indexes.len() == other.indexes.len()
     }
 }
 

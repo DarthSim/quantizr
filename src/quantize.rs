@@ -7,8 +7,6 @@ use crate::image::{CData,Image};
 use crate::cluster::Cluster;
 use crate::error::Error;
 
-const FIXED_COLORS_COUNT: u32 = 5;
-
 #[repr(C)]
 #[derive(Clone,Copy)]
 pub struct Color {
@@ -62,24 +60,16 @@ impl QuantizeResult {
         let mut heap = BinaryHeap::new();
         let mut clusters = Vec::<Cluster>::with_capacity(attr.max_colors as usize);
 
-        let mut fixed_count = 0;
-        if attr.add_fixed_colors {
-            fixed_count = FIXED_COLORS_COUNT as usize;
+        let mut root = Cluster::populate(image.width*image.height);
+        root.set_color_range(image);
+
+        if root.chan_range > 0 {
+            heap.push(root);
+        } else {
+            clusters.push(root);
         }
 
-        let mut current = Cluster::populate(image.width*image.height);
-
         loop {
-            current.set_color_range(image);
-
-            // If there is color variety, push to queue
-            // Else push to ready clusters
-            if current.chan_range > 0 {
-                heap.push(current)
-            } else {
-                clusters.push(current)
-            }
-
             // Try to pop cluster from queue
             // If nothing there, this means everything is ready
             let mut to_split = match heap.pop() {
@@ -88,9 +78,19 @@ impl QuantizeResult {
             };
 
             let median = to_split.median(image);
-            let (mut c1, c2) = to_split.split(median, image);
+            let (mut c1, mut c2) = to_split.split(median, image);
 
-            let colors = fixed_count + clusters.len() + heap.len() + 2;
+            if c1.indexes.is_empty() {
+                clusters.push(c2);
+                continue;
+            }
+
+            if c2.indexes.is_empty() {
+                clusters.push(c1);
+                continue;
+            }
+
+            let colors = clusters.len() + heap.len() + 2;
 
             // Looks like we reached the maximum of colors
             // Add new clusters to ready and flush queue
@@ -101,31 +101,32 @@ impl QuantizeResult {
                 break
             }
 
-            current = c2;
-
             c1.set_color_range(image);
+            c2.set_color_range(image);
+
             if c1.chan_range > 0 {
                 heap.push(c1);
             } else {
                 clusters.push(c1)
             }
+
+            if c2.chan_range > 0 {
+                heap.push(c2);
+            } else {
+                clusters.push(c2)
+            }
         }
 
-        res.generate_palette(&clusters, image, attr.add_fixed_colors);
+        res.generate_palette(&clusters, image);
 
         res
     }
 
-    fn generate_palette(&mut self, clusters: &Vec<Cluster>, image: &Image, add_fixed_colors: bool) {
+    fn generate_palette(&mut self, clusters: &Vec<Cluster>, image: &Image) {
         let image_data = image.data.deref();
         let mut palette = unsafe { &mut *self.palette };
 
-        let mut fixed_count = 0;
-        if add_fixed_colors {
-            fixed_count = FIXED_COLORS_COUNT;
-        }
-
-        palette.count = clusters.len() as u32 + fixed_count;
+        palette.count = clusters.len() as u32;
 
         for (i, cl) in clusters.iter().enumerate() {
             let mut rsum: u64 = 0;
@@ -147,15 +148,6 @@ impl QuantizeResult {
                 b: (bsum / count) as c_uchar,
                 a: (asum / count) as c_uchar,
             }
-        }
-
-        if fixed_count > 0 {
-            let last = clusters.len();
-            palette.entries[last + 0] = Color{r: 255, g: 255, b: 255, a: 255};
-            palette.entries[last + 1] = Color{r: 0, g: 0, b: 0, a: 0};
-            palette.entries[last + 2] = Color{r: 255, g: 0, b: 0, a: 255};
-            palette.entries[last + 3] = Color{r: 0, g: 255, b: 0, a: 255};
-            palette.entries[last + 4] = Color{r: 0, g: 0, b: 255, a: 255};
         }
     }
 
