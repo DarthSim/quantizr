@@ -157,7 +157,6 @@ impl QuantizeResult {
 
     pub fn remap_image(&self, image: &Image, buffer: &mut CData) -> Error {
         let buf = buffer.deref_mut();
-        let image_data = image.data.deref();
 
         if buf.len() < image.width * image.height {
             return Error::BufferTooSmall
@@ -173,6 +172,16 @@ impl QuantizeResult {
             palette_i32[i*4 + 3] = palette.entries[i].a as i32;
         }
 
+        if self.dithering_level > 0.0 {
+            self.remap_image_dither(image, buf, &palette_i32, palette.count as usize)
+        } else {
+            self.remap_image_no_dither(image, buf, &palette_i32, palette.count as usize)
+        }
+    }
+
+    pub fn remap_image_dither(&self, image: &Image, buf: &mut [c_uchar], palette: &[i32], colors_count: usize) -> Error {
+        let image_data = image.data.deref();
+
         let error_size = (image.width+2)*4;
 
         let mut error_curr = Vec::<f32>::new();
@@ -186,28 +195,26 @@ impl QuantizeResult {
                 let point = image.width*y + x;
                 let err_ind = (x + 1)*4;
 
-                let mut r = image_data[point*4 + 0] as i32;
-                let mut g = image_data[point*4 + 1] as i32;
-                let mut b = image_data[point*4 + 2] as i32;
-                let mut a = image_data[point*4 + 3] as i32;
+                let r = image_data[point*4 + 0] as i32;
+                let g = image_data[point*4 + 1] as i32;
+                let b = image_data[point*4 + 2] as i32;
+                let a = image_data[point*4 + 3] as i32;
 
-                if self.dithering_level > 0.0 {
-                    r = clamp(r + error_curr[err_ind + 0] as i32);
-                    g = clamp(g + error_curr[err_ind + 1] as i32);
-                    b = clamp(b + error_curr[err_ind + 2] as i32);
-                    a = clamp(a + error_curr[err_ind + 3] as i32);
-                }
+                let dr = clamp(r + error_curr[err_ind + 0] as i32);
+                let dg = clamp(g + error_curr[err_ind + 1] as i32);
+                let db = clamp(b + error_curr[err_ind + 2] as i32);
+                let da = clamp(a + error_curr[err_ind + 3] as i32);
 
                 let mut best_diff = std::u32::MAX;
                 let mut best_ind = 0;
 
-                for i in 0..(palette.count as usize) {
-                    let pr = palette_i32[i*4 + 0];
-                    let pg = palette_i32[i*4 + 1];
-                    let pb = palette_i32[i*4 + 2];
-                    let pa = palette_i32[i*4 + 3];
+                for i in 0..colors_count {
+                    let pr = palette[i*4 + 0];
+                    let pg = palette[i*4 + 1];
+                    let pb = palette[i*4 + 2];
+                    let pa = palette[i*4 + 3];
 
-                    let diff = sq_diff(r, pr) + sq_diff(g, pg) + sq_diff(b, pb) + sq_diff(a, pa);
+                    let diff = sq_diff(dr, pr) + sq_diff(dg, pg) + sq_diff(db, pb) + sq_diff(da, pa);
                     if diff < best_diff {
                         best_diff = diff;
                         best_ind = i;
@@ -216,10 +223,10 @@ impl QuantizeResult {
 
                 buf[point] = best_ind as u8;
 
-                let err_r = (r - palette_i32[best_ind*4 + 0]) as f32 / 16.0 * self.dithering_level;
-				let err_g = (g - palette_i32[best_ind*4 + 1]) as f32 / 16.0 * self.dithering_level;
-				let err_b = (b - palette_i32[best_ind*4 + 2]) as f32 / 16.0 * self.dithering_level;
-                let err_a = (a - palette_i32[best_ind*4 + 3]) as f32 / 16.0 * self.dithering_level;
+                let err_r = (r - palette[best_ind*4 + 0]) as f32 / 16.0 * self.dithering_level;
+				let err_g = (g - palette[best_ind*4 + 1]) as f32 / 16.0 * self.dithering_level;
+				let err_b = (b - palette[best_ind*4 + 2]) as f32 / 16.0 * self.dithering_level;
+                let err_a = (a - palette[best_ind*4 + 3]) as f32 / 16.0 * self.dithering_level;
 
                 error_next[err_ind - 4 + 0] += err_r * 3.0;
                 error_next[err_ind - 4 + 1] += err_g * 3.0;
@@ -246,6 +253,41 @@ impl QuantizeResult {
 			for i in 0..error_size {
 				error_next[i] = 0.0;
 			}
+        }
+
+        Error::Ok
+    }
+
+    pub fn remap_image_no_dither(&self, image: &Image, buf: &mut [c_uchar], palette: &[i32], colors_count: usize) -> Error {
+        let image_data = image.data.deref();
+
+        for y in 0..image.height {
+            for x in 0..image.width {
+                let point = image.width*y + x;
+
+                let r = image_data[point*4 + 0] as i32;
+                let g = image_data[point*4 + 1] as i32;
+                let b = image_data[point*4 + 2] as i32;
+                let a = image_data[point*4 + 3] as i32;
+
+                let mut best_diff = std::u32::MAX;
+                let mut best_ind = 0;
+
+                for i in 0..colors_count {
+                    let pr = palette[i*4 + 0];
+                    let pg = palette[i*4 + 1];
+                    let pb = palette[i*4 + 2];
+                    let pa = palette[i*4 + 3];
+
+                    let diff = sq_diff(r, pr) + sq_diff(g, pg) + sq_diff(b, pb) + sq_diff(a, pa);
+                    if diff < best_diff {
+                        best_diff = diff;
+                        best_ind = i;
+                    }
+                }
+
+                buf[point] = best_ind as u8;
+            }
         }
 
         Error::Ok
