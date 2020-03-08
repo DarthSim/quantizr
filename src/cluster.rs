@@ -2,10 +2,9 @@ use std::cmp::{Ord,Ordering};
 use std::ops::Deref;
 use std::os::raw::c_uchar;
 
+use crate::color::Color;
 use crate::image::Image;
-use crate::quantize::Color;
 
-#[repr(C)]
 pub struct Cluster {
     pub indexes: Vec<usize>,
     pub mean: Color,

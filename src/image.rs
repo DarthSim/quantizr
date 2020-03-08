@@ -26,7 +26,6 @@ impl std::ops::DerefMut for CData {
     }
 }
 
-#[repr(C)]
 pub struct Image {
     pub data: CData,
     pub width: usize,

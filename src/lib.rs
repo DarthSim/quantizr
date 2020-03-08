@@ -1,8 +1,9 @@
 mod cluster;
-mod quantize;
+mod color;
+mod error;
 mod image;
 mod options;
-mod error;
+mod quantize;
 
 #[cfg(not(feature = "imagequant_compat"))]
 mod c_api;

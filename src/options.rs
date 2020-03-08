@@ -1,6 +1,5 @@
 use crate::error::Error;
 
-#[repr(C)]
 pub struct Options {
     pub max_colors: i32,
 }

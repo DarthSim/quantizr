@@ -2,38 +2,13 @@ use std::collections::BinaryHeap;
 use std::ops::{Deref,DerefMut};
 use std::os::raw::c_uchar;
 
-use crate::options::Options;
-use crate::image::{CData,Image};
 use crate::cluster::Cluster;
+use crate::color::Color;
 use crate::error::Error;
+use crate::image::{CData,Image};
+use crate::options::Options;
 
 #[repr(C)]
-#[derive(Clone,Copy)]
-pub struct Color {
-    pub r: c_uchar,
-    pub g: c_uchar,
-    pub b: c_uchar,
-    pub a: c_uchar,
-}
-
-impl Default for Color {
-    fn default() -> Self {
-        Self{r:0, g:0, b:0, a:0}
-    }
-}
-
-impl Color {
-    pub fn new(r: c_uchar, g: c_uchar, b: c_uchar, a: c_uchar) -> Self {
-        Self{r: r, g: g, b: b, a: a}
-    }
-
-    pub fn as_slice(&self) -> [c_uchar; 4] {
-        [self.r, self.g, self.b, self.a]
-    }
-}
-
-#[repr(C)]
-#[derive(Clone)]
 pub struct Palette {
     count: u32,
     entries: [Color; 256],
@@ -48,7 +23,6 @@ impl Default for Palette {
     }
 }
 
-#[repr(C)]
 pub struct QuantizeResult {
     palette: *mut Palette,
     pub dithering_level: f32,
