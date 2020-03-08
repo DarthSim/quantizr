@@ -1,15 +1,18 @@
 [package]
-name = "rustimagequant"
+name = "quantizr"
 version = "0.1.0"
 authors = ["DarthSim <darthsim@gmail.com>"]
 edition = "2018"
 
 [lib]
-name = "imagequant"
+name = "quantizr"
 crate-type = ["cdylib"]
 
 [profile.release]
 lto = true
+
+[features]
+"imagequant_compat" = []
 
 [dependencies]
 

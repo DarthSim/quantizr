@@ -2,7 +2,7 @@ use std::cmp::{Ord,Ordering};
 use std::ops::Deref;
 use std::os::raw::c_uchar;
 
-use crate::Image;
+use crate::image::Image;
 
 #[repr(C)]
 #[derive(Eq)]

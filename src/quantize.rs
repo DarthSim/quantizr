@@ -2,10 +2,10 @@ use std::collections::BinaryHeap;
 use std::ops::{Deref,DerefMut};
 use std::os::raw::c_uchar;
 
-use crate::Attr;
-use crate::CData;
-use crate::Image;
+use crate::options::Options;
+use crate::image::{CData,Image};
 use crate::cluster::Cluster;
+use crate::error::Error;
 
 const FIXED_COLORS_COUNT: u32 = 5;
 
@@ -53,7 +53,7 @@ impl Drop for QuantizeResult {
 }
 
 impl QuantizeResult {
-    pub fn quantize(image: &Image, attr: &Attr) -> Self {
+    pub fn quantize(image: &Image, attr: &Options) -> Self {
         let mut res = Self{
             palette: Box::into_raw(Box::new(Palette::default())),
             dithering_level: 1.0,
@@ -163,9 +163,23 @@ impl QuantizeResult {
         self.palette
     }
 
-    pub fn remap_image(&self, image: &Image, buffer: &mut CData) {
+    pub fn set_dithering_level(&mut self, level: f32) -> Error {
+        if level > 1.0 || level < 0.0 {
+            return Error::ValueOutOfRange
+        }
+
+        self.dithering_level = level;
+
+        Error::Ok
+    }
+
+    pub fn remap_image(&self, image: &Image, buffer: &mut CData) -> Error {
         let buf = buffer.deref_mut();
         let image_data = image.data.deref();
+
+        if buf.len() < image.width * image.height {
+            return Error::BufferTooSmall
+        }
 
         let palette = unsafe { &*self.palette };
 
@@ -251,6 +265,8 @@ impl QuantizeResult {
 				error_next[i] = 0.0;
 			}
         }
+
+        Error::Ok
     }
 }
 
