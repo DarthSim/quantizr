@@ -22,15 +22,11 @@ pub extern fn quantizr_create_image_rgba(data: *mut c_uchar, width: i32, height:
 }
 
 #[no_mangle]
-pub extern fn quantizr_quantize(image: *mut Image, options: *mut Options, result: *mut *mut QuantizeResult) -> Error {
+pub extern fn quantizr_quantize(image: *mut Image, options: *mut Options) -> *mut QuantizeResult {
     let img = unsafe { &*image };
     let opts = unsafe { &*options };
 
-    let res = QuantizeResult::quantize(img, opts);
-
-    unsafe{ *result = Box::into_raw(Box::new(res)) }
-
-    Error::Ok
+    Box::into_raw(Box::new(QuantizeResult::quantize(img, opts)))
 }
 
 #[no_mangle]

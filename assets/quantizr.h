@@ -25,7 +25,7 @@ quantizr_error quantizr_set_max_colors(quantizr_options* opts, int colors);
 
 quantizr_image* quantizr_create_image_rgba(const void *data, int width, int height);
 
-quantizr_error quantizr_quantize(quantizr_image *const image, quantizr_options *const options, quantizr_result **result_output);
+quantizr_result* quantizr_quantize(quantizr_image *const image, quantizr_options *const options);
 
 quantizr_error quantizr_set_dithering_level(quantizr_result *result, float level);
 
