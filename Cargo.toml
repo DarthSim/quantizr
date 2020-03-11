@@ -9,7 +9,10 @@ name = "quantizr"
 crate-type = ["cdylib"]
 
 [profile.release]
+opt-level = 3
 lto = true
+debug = false
+debug-assertions = false
 
 [features]
 "imagequant_compat" = []

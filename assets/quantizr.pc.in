@@ -1,0 +1,9 @@
+prefix=PREFIX
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: quantizr
+Description: C library for conversion of RGBA images to 8-bit paletted images.
+Version: VERSION
+Libs: -L${libdir} -lquantizr
+Cflags: -I${includedir}

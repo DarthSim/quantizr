@@ -1,0 +1,9 @@
+Package: NAME
+Version: VERSION
+Section: base
+Priority: optional
+Architecture: amd64
+Depends: libgcc1
+Maintainer: Sergey Alexandrovich <darthsim@gmail.com>
+Description: Quantizr
+ C library for conversion of RGBA images to 8-bit paletted images.

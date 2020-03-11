@@ -1,2 +1,7 @@
 /target
 tmp/
+
+config.mk
+dist/
+assets/control
+assets/quantizr.pc
