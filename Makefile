@@ -58,7 +58,7 @@ build-deb:
 		--prefix=/usr \
 		--libdir=$(DEB_DIR)/usr/lib \
 		--pkgconfigdir=$(DEB_DIR)/usr/lib/pkgconfig \
-		--includedir=$(DEB_DIT)/usr/include
+		--includedir=$(DEB_DIR)/usr/include
 
 	CONFIG=dist/config.mk make build $(CONTROL) install
 
@@ -80,7 +80,7 @@ build-deb:
 		--prefix=/usr \
 		--libdir=$(DEB_DIR)/usr/lib \
 		--pkgconfigdir=$(DEB_DIR)/usr/lib/pkgconfig \
-		--includedir=$(DEB_DIT)/usr/include \
+		--includedir=$(DEB_DIR)/usr/include \
 		--enable-imagequant-compatibility \
 		--deb-name=quantizr-imagequant-compat
 
