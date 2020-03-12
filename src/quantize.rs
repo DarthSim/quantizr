@@ -14,6 +14,19 @@ pub struct Palette {
     entries: [Color; 256],
 }
 
+impl Palette {
+    fn as_i32(&self) -> [i32; 1024] {
+        let mut palette_i32: [i32; 1024] = [0; 1024];
+        for i in 0..(self.count as usize) {
+            palette_i32[i*4 + 0] = self.entries[i].r as i32;
+            palette_i32[i*4 + 1] = self.entries[i].g as i32;
+            palette_i32[i*4 + 2] = self.entries[i].b as i32;
+            palette_i32[i*4 + 3] = self.entries[i].a as i32;
+        }
+        palette_i32
+    }
+}
+
 impl Default for Palette {
     fn default() -> Self {
         Self{
@@ -138,22 +151,16 @@ impl QuantizeResult {
 
         let palette = unsafe { &*self.palette };
 
-        let mut palette_i32: [i32; 1024] = [0; 1024];
-        for i in 0..(palette.count as usize) {
-            palette_i32[i*4 + 0] = palette.entries[i].r as i32;
-            palette_i32[i*4 + 1] = palette.entries[i].g as i32;
-            palette_i32[i*4 + 2] = palette.entries[i].b as i32;
-            palette_i32[i*4 + 3] = palette.entries[i].a as i32;
+        if self.dithering_level > 0.0 {
+            self.remap_image_dither(image, buf, &palette.as_i32(), palette.count as usize);
+        } else {
+            self.remap_image_no_dither(image, buf, &palette.as_i32(), palette.count as usize);
         }
 
-        if self.dithering_level > 0.0 {
-            self.remap_image_dither(image, buf, &palette_i32, palette.count as usize)
-        } else {
-            self.remap_image_no_dither(image, buf, &palette_i32, palette.count as usize)
-        }
+        Error::Ok
     }
 
-    pub fn remap_image_dither(&self, image: &Image, buf: &mut [c_uchar], palette: &[i32], colors_count: usize) -> Error {
+    fn remap_image_dither(&self, image: &Image, buf: &mut [c_uchar], palette: &[i32], colors_count: usize) {
         let image_data = image.data.deref();
 
         let error_size = (image.width+2)*4;
@@ -193,6 +200,10 @@ impl QuantizeResult {
                         best_diff = diff;
                         best_ind = i;
                     }
+
+                    if best_diff == 0 {
+                        break
+                    }
                 }
 
                 buf[point] = best_ind as u8;
@@ -228,43 +239,41 @@ impl QuantizeResult {
 				error_next[i] = 0.0;
 			}
         }
-
-        Error::Ok
     }
 
-    pub fn remap_image_no_dither(&self, image: &Image, buf: &mut [c_uchar], palette: &[i32], colors_count: usize) -> Error {
+    fn remap_image_no_dither(&self, image: &Image, buf: &mut [c_uchar], palette: &[i32], colors_count: usize) {
         let image_data = image.data.deref();
 
-        for y in 0..image.height {
-            for x in 0..image.width {
-                let point = image.width*y + x;
+        for point in 0..image.width*image.height {
+            let data_point = point*4;
+            let r = image_data[data_point + 0] as i32;
+            let g = image_data[data_point + 1] as i32;
+            let b = image_data[data_point + 2] as i32;
+            let a = image_data[data_point + 3] as i32;
 
-                let r = image_data[point*4 + 0] as i32;
-                let g = image_data[point*4 + 1] as i32;
-                let b = image_data[point*4 + 2] as i32;
-                let a = image_data[point*4 + 3] as i32;
+            let mut best_diff = std::u32::MAX;
+            let mut best_ind = 0;
 
-                let mut best_diff = std::u32::MAX;
-                let mut best_ind = 0;
+            for i in 0..colors_count {
+                let color_ind = i*4;
+                let pr = palette[color_ind + 0];
+                let pg = palette[color_ind + 1];
+                let pb = palette[color_ind + 2];
+                let pa = palette[color_ind + 3];
 
-                for i in 0..colors_count {
-                    let pr = palette[i*4 + 0];
-                    let pg = palette[i*4 + 1];
-                    let pb = palette[i*4 + 2];
-                    let pa = palette[i*4 + 3];
-
-                    let diff = sq_diff(r, pr) + sq_diff(g, pg) + sq_diff(b, pb) + sq_diff(a, pa);
-                    if diff < best_diff {
-                        best_diff = diff;
-                        best_ind = i;
-                    }
+                let diff = sq_diff(r, pr) + sq_diff(g, pg) + sq_diff(b, pb) + sq_diff(a, pa);
+                if diff < best_diff {
+                    best_diff = diff;
+                    best_ind = i;
                 }
 
-                buf[point] = best_ind as u8;
+                if best_diff == 0 {
+                    break
+                }
             }
-        }
 
-        Error::Ok
+            buf[point] = best_ind as u8;
+        }
     }
 }
 
