@@ -58,9 +58,10 @@ impl QuantizeResult {
         let mut clusters = Vec::<Cluster>::with_capacity(attr.max_colors as usize);
 
         let mut root = Cluster::populate(image.width*image.height);
-        root.calc_mean_and_range(image);
+        root.calc_mean_and_priority(image);
 
-        if root.chan_range > 0 {
+        // If priority is zero, then all colors in cluster are the same
+        if root.priority > 0 {
             heap.push(root);
         } else {
             clusters.push(root);
@@ -76,8 +77,8 @@ impl QuantizeResult {
 
             let (mut c1, mut c2) = to_split.split(image);
 
-            c1.calc_mean_and_range(image);
-            c2.calc_mean_and_range(image);
+            c1.calc_mean_and_priority(image);
+            c2.calc_mean_and_priority(image);
 
             if c1.indexes.is_empty() {
                 clusters.push(c2);
@@ -100,13 +101,13 @@ impl QuantizeResult {
                 break
             }
 
-            if c1.chan_range > 0 {
+            if c1.priority > 0 {
                 heap.push(c1);
             } else {
                 clusters.push(c1)
             }
 
-            if c2.chan_range > 0 {
+            if c2.priority > 0 {
                 heap.push(c2);
             } else {
                 clusters.push(c2)
