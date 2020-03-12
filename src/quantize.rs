@@ -114,6 +114,10 @@ impl QuantizeResult {
             }
         }
 
+        clusters.sort_by_cached_key(|cl| {
+            std::usize::MAX - cl.indexes.len()
+        });
+
         res.generate_palette(&clusters);
 
         res
