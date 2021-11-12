@@ -29,6 +29,8 @@ liq_attr* liq_attr_create(void);
 
 liq_error liq_set_max_colors(liq_attr* attr, int colors);
 
+liq_error liq_set_speed(liq_attr* attr, int speed);
+
 liq_error liq_set_quality(liq_attr* attr, int minimum, int maximum);
 
 liq_image* liq_image_create_rgba(const liq_attr *attr, const void *bitmap, int width, int height, double gamma);

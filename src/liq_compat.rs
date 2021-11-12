@@ -41,6 +41,12 @@ pub extern fn liq_set_max_colors(options: *mut Options, colors: i32) -> LiqError
 }
 
 #[no_mangle]
+pub extern fn liq_set_speed(_attr: *mut Options, _speed: i32) -> LiqError {
+    // TODO
+    LiqError::Ok
+}
+
+#[no_mangle]
 pub extern fn liq_set_quality(_attr: *mut Options, _min: i32, _max: i32) -> LiqError {
     // TODO
     LiqError::Ok
