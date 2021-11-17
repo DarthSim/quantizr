@@ -4,18 +4,12 @@ Fast C library for conversion of RGBA images to 8-bit paletted images written in
 
 ## Installation
 
-### DEB-package
-
-deb-packages can be downloaded from the [releases](https://github.com/DarthSim/quantizr/releases) page.
-
 ### Build from source
 
-Quantizr written in Rust, so you need to [install it](https://www.rust-lang.org/tools/install) first. Then simply run:
+Quantizr written in Rust, so you need to [install it](https://www.rust-lang.org/tools/install) first. Also, you need [cargo-c](https://github.com/lu-zero/cargo-c#installation). Then simply run:
 
 ```bash
-./configure
-make
-make install
+cargo cinstall --release
 ```
 
 ## Usage
@@ -61,21 +55,9 @@ quantizr_free_options(opts);
 
 ## Using with [libvips](https://github.com/libvips/libvips)
 
-libvips currently doesn't have Quantizr support. That's why Quantizr has libimagequant-compatible mode. In this mode, Quantizr partly implements libimagequant API enough to be used with libvips.
+libvips currently doesn't have Quantizr support. That's why Quantizr partly implements libimagequant API enough to be used with libvips.
 
-deb-packages with libimagequan-compatible build can be downloaded from the [releases](https://github.com/DarthSim/quantizr/releases) page.
-
-If you;d like to build libimagequan-compatible Quantizr from the source, run the following:
-
-```bash
-./configure --enable-imagequant-compatibility
-make
-make install
-```
-
-**Warning:** If you have libimagequant installed, `make install` can overwrite it's header (`libimagequant.h`) and/or pkg-config file (`imagequant.pc`).
-
-After installing libimagequan-compatible Quantizr you can build and run libvips as usual.
+Just link or rename `/usr/local/lib/pkgconfig/quantizr.pc` to `/usr/local/lib/pkgconfig/imagequant.pc`, and `/usr/local/include/quantizr/quantizr.h` to `/usr/local/include/quantizr/libimagequant.h`, and libvips will see Quantizr as libimagequant.
 
 ## Author
 

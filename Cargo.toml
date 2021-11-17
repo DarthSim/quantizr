@@ -6,7 +6,6 @@ edition = "2018"
 
 [lib]
 name = "quantizr"
-crate-type = ["cdylib"]
 
 [profile.release]
 opt-level = 3
@@ -15,7 +14,7 @@ debug = false
 debug-assertions = false
 
 [features]
-"imagequant_compat" = []
+"capi" = []
 
 [dependencies]
 

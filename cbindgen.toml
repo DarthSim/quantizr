@@ -1,0 +1,23 @@
+header = "// SPDX-License-Identifier: MIT"
+# sys_includes = ["stddef.h", "stdint.h", "stdlib.h"]
+# no_includes = true
+include_guard = "QUANTIZR_H"
+tab_width = 2
+style = "Type"
+language = "C"
+
+[export.rename]
+"Options" = "QuantizrOptions"
+"QuantizeResult" = "QuantizrResult"
+"Image" = "QuantizrImage"
+"Error" = "QuantizrError"
+"Color" = "QuantizrColor"
+"Palette" = "QuantizrPalette"
+"LiqAttr" = "liq_attr"
+"LiqResult" = "liq_result"
+"LiqImage" = "liq_image"
+"LiqError" = "liq_error"
+"LiqPalette" = "liq_palette"
+
+[enum]
+rename_variants = "ScreamingSnakeCase"
