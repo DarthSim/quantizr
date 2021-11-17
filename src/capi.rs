@@ -1,7 +1,7 @@
-use std::os::raw::c_uchar;
+use std::slice;
 
 use crate::quantize::{QuantizeResult,Palette};
-use crate::image::{CData,Image};
+use crate::image::Image;
 use crate::options::Options;
 use crate::error::Error;
 
@@ -29,59 +29,56 @@ pub extern fn quantizr_new_options() -> *mut Options {
 }
 
 #[no_mangle]
-pub extern fn quantizr_set_max_colors(options: *mut Options, colors: i32) -> QuantizrError {
-    let opts = unsafe { &mut *options };
-    opts.set_max_colors(colors).into()
+pub unsafe extern fn quantizr_set_max_colors(options: *mut Options, colors: i32) -> QuantizrError {
+    (*options).set_max_colors(colors).into()
 }
 
 #[no_mangle]
-pub extern fn quantizr_create_image_rgba(data: *mut c_uchar, width: i32, height: i32) -> *mut Image {
-    Box::into_raw(Box::new(Image::new(data, width, height)))
+pub unsafe extern fn quantizr_create_image_rgba(data: *const u8, width: i32, height: i32) -> *mut Image {
+    let uwidth = width as usize;
+    let uheight = height as usize;
+    let size: usize = uwidth * uheight * 4;
+
+    let data_slice = slice::from_raw_parts(data, size);
+
+    Box::into_raw(Box::new(Image::new(data_slice, uwidth, uheight)))
 }
 
 #[no_mangle]
-pub extern fn quantizr_quantize(image: *mut Image, options: *mut Options) -> *mut QuantizeResult {
-    let img = unsafe { &*image };
-    let opts = unsafe { &*options };
-
-    Box::into_raw(Box::new(QuantizeResult::quantize(img, opts)))
+pub unsafe extern fn quantizr_quantize(image: *const Image, options: *const Options) -> *mut QuantizeResult {
+    Box::into_raw(Box::new(QuantizeResult::quantize(&(*image), &(*options))))
 }
 
 #[no_mangle]
-pub extern fn quantizr_set_dithering_level(result: *mut QuantizeResult, dither: f32) -> QuantizrError {
-    let res = unsafe { &mut *result };
-    res.set_dithering_level(dither).into()
+pub unsafe extern fn quantizr_set_dithering_level(result: *mut QuantizeResult, dither: f32) -> QuantizrError {
+    (*result).set_dithering_level(dither).into()
 }
 
 #[no_mangle]
-pub extern fn quantizr_get_palette(result: *mut QuantizeResult) -> *mut Palette {
-    let res = unsafe { &*result };
-    res.get_palette_ptr()
+pub unsafe extern fn quantizr_get_palette(result: *mut QuantizeResult) -> *const Palette {
+    &(*result).palette
 }
 
 #[no_mangle]
-pub extern fn quantizr_remap(result: *mut QuantizeResult, image: *mut Image, buffer: *mut c_uchar, buffer_size: usize) -> QuantizrError {
-    let res = unsafe { &*result };
-    let img = unsafe { &*image };
+pub unsafe extern fn quantizr_remap(result: *mut QuantizeResult, image: *mut Image, buffer: *mut u8, buffer_size: usize) -> QuantizrError {
+    let mut buf = slice::from_raw_parts_mut(buffer, buffer_size);
 
-    let mut buf = CData::new(buffer, buffer_size);
-
-    res.remap_image(img, &mut buf).into()
+    (*result).remap_image(&(*image), &mut buf).into()
 }
 
 #[no_mangle]
-pub extern fn quantizr_free_result(result: *mut QuantizeResult) {
-    unsafe { std::mem::drop(Box::from_raw(result)) };
+pub unsafe extern fn quantizr_free_result(result: *mut QuantizeResult) {
+    std::mem::drop(Box::from_raw(result))
 }
 
 #[no_mangle]
-pub extern fn quantizr_free_image(image: *mut Image) {
-    unsafe { std::mem::drop(Box::from_raw(image)) };
+pub unsafe extern fn quantizr_free_image(image: *mut Image) {
+    std::mem::drop(Box::from_raw(image))
 }
 
 #[no_mangle]
-pub extern fn quantizr_free_options(options: *mut Options) {
-    unsafe { std::mem::drop(Box::from_raw(options)) };
+pub unsafe extern fn quantizr_free_options(options: *mut Options) {
+    std::mem::drop(Box::from_raw(options))
 }
 
 #[repr(C)]
@@ -119,7 +116,7 @@ pub extern fn liq_attr_create() -> *mut LiqAttr {
 }
 
 #[no_mangle]
-pub extern fn liq_set_max_colors(options: *mut LiqAttr, colors: i32) -> LiqError {
+pub unsafe extern fn liq_set_max_colors(options: *mut LiqAttr, colors: i32) -> LiqError {
     quantizr_set_max_colors(options, colors).into()
 }
 
@@ -136,28 +133,28 @@ pub extern fn liq_set_speed(_attr: *mut LiqAttr, _speed: i32) -> LiqError {
 }
 
 #[no_mangle]
-pub extern fn liq_image_create_rgba(_options: *mut LiqAttr, data: *mut c_uchar, width: i32, height: i32, _gamma: f64) -> *mut LiqImage {
+pub unsafe extern fn liq_image_create_rgba(_options: *const LiqAttr, data: *const u8, width: i32, height: i32, _gamma: f64) -> *mut LiqImage {
     quantizr_create_image_rgba(data, width, height).into()
 }
 
 #[no_mangle]
-pub extern fn liq_image_quantize(image: *mut LiqImage, options: *mut LiqAttr, result: *mut *mut LiqResult) -> LiqError {
-    unsafe{ *result = quantizr_quantize(image, options) };
+pub unsafe extern fn liq_image_quantize(image: *const LiqImage, options: *const LiqAttr, result: *mut *mut LiqResult) -> LiqError {
+    *result = quantizr_quantize(image, options);
     LiqError::LiqOk
 }
 
 #[no_mangle]
-pub extern fn liq_set_dithering_level(result: *mut LiqResult, dither: f32) -> LiqError {
+pub unsafe extern fn liq_set_dithering_level(result: *mut LiqResult, dither: f32) -> LiqError {
     quantizr_set_dithering_level(result, dither).into()
 }
 
 #[no_mangle]
-pub extern fn liq_get_palette(result: *mut LiqResult) -> *mut LiqPalette {
+pub unsafe extern fn liq_get_palette(result: *mut LiqResult) -> *const LiqPalette {
     quantizr_get_palette(result)
 }
 
 #[no_mangle]
-pub extern fn liq_write_remapped_image(result: *mut LiqResult, image: *mut LiqImage, buffer: *mut c_uchar, buffer_size: usize) -> LiqError {
+pub unsafe extern fn liq_write_remapped_image(result: *mut LiqResult, image: *mut LiqImage, buffer: *mut u8, buffer_size: usize) -> LiqError {
     quantizr_remap(result, image, buffer, buffer_size).into()
 }
 

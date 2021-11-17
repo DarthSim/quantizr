@@ -1,5 +1,4 @@
 use std::cmp::{Ord,Ordering};
-use std::ops::Deref;
 use std::os::raw::c_uchar;
 
 use crate::color::Color;
@@ -61,14 +60,12 @@ impl Cluster {
 
         self.calc_mean(image);
 
-        let image_data = image.data.deref();
-
         let mut diff_sum: [usize; 4] = [0; 4];
         let mean = self.mean.as_slice();
 
         for ind in self.indexes.iter() {
             for ch in 0..=3usize {
-                let val = image_data[ind*4 + ch];
+                let val = image.data[ind*4 + ch];
                 let d = diff(val, mean[ch]);
 
                 diff_sum[ch] += d as usize;
@@ -94,8 +91,6 @@ impl Cluster {
     }
 
     pub fn split(&mut self, image: &Image) -> (Cluster, Cluster) {
-        let image_data = image.data.deref();
-
         let mean = self.mean.as_slice();
         let widest_chan = self.widest_chan as usize;
 
@@ -105,7 +100,7 @@ impl Cluster {
 
         while i <= gt {
             let ind = self.indexes[i];
-            let val = image_data[ind*4 + widest_chan];
+            let val = image.data[ind*4 + widest_chan];
 
             if val < mean[widest_chan] {
                 if lt != i {
@@ -132,18 +127,16 @@ impl Cluster {
     }
 
     pub fn calc_mean(&mut self, image: &Image) {
-        let image_data = image.data.deref();
-
         let mut rsum: usize = 0;
         let mut gsum: usize = 0;
         let mut bsum: usize = 0;
         let mut asum: usize = 0;
 
         for ind in self.indexes.iter() {
-            rsum += image_data[ind*4 + 0] as usize;
-            gsum += image_data[ind*4 + 1] as usize;
-            bsum += image_data[ind*4 + 2] as usize;
-            asum += image_data[ind*4 + 3] as usize;
+            rsum += image.data[ind*4 + 0] as usize;
+            gsum += image.data[ind*4 + 1] as usize;
+            bsum += image.data[ind*4 + 2] as usize;
+            asum += image.data[ind*4 + 3] as usize;
         }
 
         let count = self.indexes.len();
