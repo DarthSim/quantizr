@@ -1,5 +1,6 @@
 mod cluster;
 mod color;
+mod colormap;
 mod error;
 
 pub mod image;

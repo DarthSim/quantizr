@@ -42,11 +42,10 @@ impl Cluster {
     }
 
     pub fn populate(count: usize) -> Self {
-        let mut indexes = Vec::<usize>::with_capacity(count);
+        let mut indexes = vec![];
 
-        for ind in 0..count {
-            indexes.push(ind)
-        }
+        let mut ind = 0;
+        indexes.resize_with(count, || { let i = ind; ind += 1; i });
 
         Self::new(indexes)
     }
@@ -64,11 +63,10 @@ impl Cluster {
         let mean = self.mean.as_slice();
 
         for ind in self.indexes.iter() {
+            let data_ind = ind*4;
             for ch in 0..=3usize {
-                let val = image.data[ind*4 + ch];
-                let d = diff(val, mean[ch]);
-
-                diff_sum[ch] += d as usize;
+                let val = image.data[data_ind + ch];
+                diff_sum[ch] += diff(val, mean[ch]) as usize;
             }
         }
 
@@ -91,8 +89,8 @@ impl Cluster {
     }
 
     pub fn split(&mut self, image: &Image) -> (Cluster, Cluster) {
-        let mean = self.mean.as_slice();
         let widest_chan = self.widest_chan as usize;
+        let widest_chan_mean = self.mean.as_slice()[widest_chan];
 
         let mut i: usize = 0;
         let mut lt: usize = 0;
@@ -102,13 +100,13 @@ impl Cluster {
             let ind = self.indexes[i];
             let val = image.data[ind*4 + widest_chan];
 
-            if val < mean[widest_chan] {
+            if val < widest_chan_mean {
                 if lt != i {
                     self.indexes.swap(lt, i);
                 }
                 lt += 1;
                 i += 1;
-            } else if val > mean[widest_chan] {
+            } else if val > widest_chan_mean {
                 self.indexes.swap(gt, i);
                 gt -= 1;
             } else {
@@ -133,10 +131,11 @@ impl Cluster {
         let mut asum: usize = 0;
 
         for ind in self.indexes.iter() {
-            rsum += image.data[ind*4 + 0] as usize;
-            gsum += image.data[ind*4 + 1] as usize;
-            bsum += image.data[ind*4 + 2] as usize;
-            asum += image.data[ind*4 + 3] as usize;
+            let data_ind = ind*4;
+            rsum += image.data[data_ind + 0] as usize;
+            gsum += image.data[data_ind + 1] as usize;
+            bsum += image.data[data_ind + 2] as usize;
+            asum += image.data[data_ind + 3] as usize;
         }
 
         let count = self.indexes.len();

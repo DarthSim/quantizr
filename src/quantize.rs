@@ -5,24 +5,12 @@ use crate::color::Color;
 use crate::error::Error;
 use crate::image::Image;
 use crate::options::Options;
+use crate::colormap::Colormap;
 
 #[repr(C)]
 pub struct Palette {
-    count: u32,
-    entries: [Color; 256],
-}
-
-impl Palette {
-    fn as_i32(&self) -> [i32; 1024] {
-        let mut palette_i32: [i32; 1024] = [0; 1024];
-        for i in 0..(self.count as usize) {
-            palette_i32[i*4 + 0] = self.entries[i].r as i32;
-            palette_i32[i*4 + 1] = self.entries[i].g as i32;
-            palette_i32[i*4 + 2] = self.entries[i].b as i32;
-            palette_i32[i*4 + 3] = self.entries[i].a as i32;
-        }
-        palette_i32
-    }
+    pub count: u32,
+    pub entries: [Color; 256],
 }
 
 impl Default for Palette {
@@ -138,141 +126,128 @@ impl QuantizeResult {
             return Error::BufferTooSmall
         }
 
+        let cm = Colormap::new(&self.palette);
+
         if self.dithering_level > 0.0 {
-            self.remap_image_dither(image, buf, &self.palette.as_i32(), self.palette.count as usize);
+            self.remap_image_dither(image, buf, &cm);
         } else {
-            self.remap_image_no_dither(image, buf, &self.palette.as_i32(), self.palette.count as usize);
+            self.remap_image_no_dither(image, buf, &cm);
         }
 
         Error::Ok
     }
 
-    fn remap_image_dither(&self, image: &Image, buf: &mut [u8], palette: &[i32], colors_count: usize) {
-        let error_size = (image.width+2)*4;
+    fn remap_image_dither(&self, image: &Image, buf: &mut [u8], cm: &Colormap) {
+        let error_size = image.width+2;
+        let mut error_curr = vec![[0f32; 4]; error_size].into_boxed_slice();
+        let mut error_next = vec![[0f32; 4]; error_size].into_boxed_slice();
 
-        let mut error_curr = Vec::<f32>::new();
-        error_curr.resize(error_size, 0.0);
-
-        let mut error_next = Vec::<f32>::new();
-        error_next.resize(error_size, 0.0);
+        let mut last_ind = 0;
+        let mut x_reverse = true;
 
         for y in 0..image.height {
-            for x in 0..image.width {
+            x_reverse = !x_reverse;
+
+            let mut x = match x_reverse {
+                false => 0,
+                true => image.width - 1,
+            };
+
+            loop {
                 let point = image.width*y + x;
-                let err_ind = (x + 1)*4;
+                let data_point = point * 4;
 
-                let r = image.data[point*4 + 0] as i32;
-                let g = image.data[point*4 + 1] as i32;
-                let b = image.data[point*4 + 2] as i32;
-                let a = image.data[point*4 + 3] as i32;
+                let err_ind = x + 1;
+                let mut err_inds = [err_ind - 1, err_ind, err_ind + 1];
+                if x_reverse {
+                    let tmp = err_inds[0];
+                    err_inds[0] = err_inds[2];
+                    err_inds[2] = tmp
+                }
 
-                let dr = clamp(r + error_curr[err_ind + 0] as i32);
-                let dg = clamp(g + error_curr[err_ind + 1] as i32);
-                let db = clamp(b + error_curr[err_ind + 2] as i32);
-                let da = clamp(a + error_curr[err_ind + 3] as i32);
+                let pix = &image.data[data_point..data_point+4];
+                let r = pix[0] as f32;
+                let g = pix[1] as f32;
+                let b = pix[2] as f32;
+                let a = pix[3] as f32;
 
-                let mut best_diff = std::u32::MAX;
-                let mut best_ind = 0;
+                let err_pix = &error_curr[err_ind];
+                let dr = (r + err_pix[0]).max(0.0).min(255.0);
+                let dg = (g + err_pix[1]).max(0.0).min(255.0);
+                let db = (b + err_pix[2]).max(0.0).min(255.0);
+                let da = (a + err_pix[3]).max(0.0).min(255.0);
 
-                for i in 0..colors_count {
-                    let pr = palette[i*4 + 0];
-                    let pg = palette[i*4 + 1];
-                    let pb = palette[i*4 + 2];
-                    let pa = palette[i*4 + 3];
+                last_ind = cm.nearest_ind(&[dr, dg, db, da], last_ind);
+                buf[point] = last_ind as u8;
 
-                    let diff = sq_diff(dr, pr) + sq_diff(dg, pg) + sq_diff(db, pb) + sq_diff(da, pa);
-                    if diff < best_diff {
-                        best_diff = diff;
-                        best_ind = i;
+                let pal_pix = cm.color(last_ind);
+                let err_r = (r - pal_pix[0]) / 16.0 * self.dithering_level;
+                let err_g = (g - pal_pix[1]) / 16.0 * self.dithering_level;
+                let err_b = (b - pal_pix[2]) / 16.0 * self.dithering_level;
+                let err_a = (a - pal_pix[3]) / 16.0 * self.dithering_level;
+
+                let err = &mut error_next[err_inds[0]];
+                err[0] += err_r * 3.0;
+                err[1] += err_g * 3.0;
+                err[2] += err_b * 3.0;
+                err[3] += err_a * 3.0;
+
+                let err = &mut error_next[err_inds[1]];
+                err[0] += err_r * 5.0;
+                err[1] += err_g * 5.0;
+                err[2] += err_b * 5.0;
+                err[3] += err_a * 5.0;
+
+                let err = &mut error_next[err_inds[2]];
+                err[0] += err_r * 1.0;
+                err[1] += err_g * 1.0;
+                err[2] += err_b * 1.0;
+                err[3] += err_a * 1.0;
+
+                let err = &mut error_curr[err_inds[2]];
+                err[0] += err_r * 7.0;
+                err[1] += err_g * 7.0;
+                err[2] += err_b * 7.0;
+                err[3] += err_a * 7.0;
+
+                if x_reverse {
+                    if x <= 0 {
+                        break
                     }
-
-                    if best_diff == 0 {
+                    x -= 1;
+                } else {
+                    x += 1;
+                    if x >= image.width {
                         break
                     }
                 }
-
-                buf[point] = best_ind as u8;
-
-                let err_r = (r - palette[best_ind*4 + 0]) as f32 / 16.0 * self.dithering_level;
-				let err_g = (g - palette[best_ind*4 + 1]) as f32 / 16.0 * self.dithering_level;
-				let err_b = (b - palette[best_ind*4 + 2]) as f32 / 16.0 * self.dithering_level;
-                let err_a = (a - palette[best_ind*4 + 3]) as f32 / 16.0 * self.dithering_level;
-
-                error_next[err_ind - 4 + 0] += err_r * 3.0;
-                error_next[err_ind - 4 + 1] += err_g * 3.0;
-                error_next[err_ind - 4 + 2] += err_b * 3.0;
-                error_next[err_ind - 4 + 3] += err_a * 3.0;
-                error_next[err_ind + 0 + 0] += err_r * 5.0;
-                error_next[err_ind + 0 + 1] += err_g * 5.0;
-                error_next[err_ind + 0 + 2] += err_b * 5.0;
-                error_next[err_ind + 0 + 3] += err_a * 5.0;
-                error_next[err_ind + 4 + 0] += err_r * 1.0;
-                error_next[err_ind + 4 + 1] += err_g * 1.0;
-                error_next[err_ind + 4 + 2] += err_b * 1.0;
-                error_next[err_ind + 4 + 3] += err_a * 1.0;
-                error_curr[err_ind + 4 + 0] += err_r * 7.0;
-                error_curr[err_ind + 4 + 1] += err_g * 7.0;
-                error_curr[err_ind + 4 + 2] += err_b * 7.0;
-                error_curr[err_ind + 4 + 3] += err_a * 7.0;
             }
 
             let tmp_err = error_curr;
             error_curr = error_next;
             error_next = tmp_err;
 
-			for i in 0..error_size {
-				error_next[i] = 0.0;
-			}
+            for i in 0..error_size {
+                error_next[i] = [0.0, 0.0, 0.0, 0.0];
+            }
         }
     }
 
-    fn remap_image_no_dither(&self, image: &Image, buf: &mut [u8], palette: &[i32], colors_count: usize) {
+    fn remap_image_no_dither(&self, image: &Image, buf: &mut [u8], cm: &Colormap) {
+        let mut last_ind = 0;
+
         for point in 0..image.width*image.height {
             let data_point = point*4;
-            let r = image.data[data_point + 0] as i32;
-            let g = image.data[data_point + 1] as i32;
-            let b = image.data[data_point + 2] as i32;
-            let a = image.data[data_point + 3] as i32;
 
-            let mut best_diff = std::u32::MAX;
-            let mut best_ind = 0;
+            let pix = &image.data[data_point..data_point+4];
+            let r = pix[0] as f32;
+            let g = pix[1] as f32;
+            let b = pix[2] as f32;
+            let a = pix[3] as f32;
 
-            for i in 0..colors_count {
-                let color_ind = i*4;
-                let pr = palette[color_ind + 0];
-                let pg = palette[color_ind + 1];
-                let pb = palette[color_ind + 2];
-                let pa = palette[color_ind + 3];
+            last_ind = cm.nearest_ind(&[r, g, b, a], last_ind);
 
-                let diff = sq_diff(r, pr) + sq_diff(g, pg) + sq_diff(b, pb) + sq_diff(a, pa);
-                if diff < best_diff {
-                    best_diff = diff;
-                    best_ind = i;
-                }
-
-                if best_diff == 0 {
-                    break
-                }
-            }
-
-            buf[point] = best_ind as u8;
+            buf[point] = last_ind as u8;
         }
     }
-}
-
-#[inline]
-fn clamp(a: i32) -> i32 {
-    if a < 0 {
-        return 0
-    }
-    if a > 255 {
-        return 255
-    }
-    a
-}
-
-#[inline]
-fn sq_diff(a: i32, b: i32) -> u32 {
-    let diff = a - b;
-    (diff * diff) as u32
 }
