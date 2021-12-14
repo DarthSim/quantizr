@@ -132,6 +132,7 @@ impl QuantizeResult {
         self.fix_palette(image, buf);
 
         if self.dithering_level > 0.0 {
+            let cm = Colormap::new(&self.palette);
             self.dither_image(image, buf, &cm);
         }
 
