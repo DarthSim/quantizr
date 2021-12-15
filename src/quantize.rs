@@ -25,15 +25,11 @@ impl Default for Palette {
 pub struct QuantizeResult {
     pub palette: Palette,
     pub dithering_level: f32,
+    colormap: Colormap,
 }
 
 impl QuantizeResult {
     pub fn quantize(image: &Image, attr: &Options) -> Self {
-        let mut res = Self{
-            palette: Palette::default(),
-            dithering_level: 1.0,
-        };
-
         let mut heap = BinaryHeap::new();
         let mut clusters = Vec::<Cluster>::with_capacity(attr.max_colors as usize);
 
@@ -94,20 +90,14 @@ impl QuantizeResult {
             }
         }
 
-        clusters.sort_by_cached_key(|cl| {
-            std::usize::MAX - cl.colors.len()
-        });
+        let mut palette = Palette::default();
+        let colormap = Colormap::new(&clusters);
+        colormap.generate_palette(&mut palette);
 
-        res.generate_palette(&clusters);
-
-        res
-    }
-
-    fn generate_palette(&mut self, clusters: &Vec<Cluster>) {
-        self.palette.count = clusters.len() as u32;
-
-        for (i, cl) in clusters.iter().enumerate() {
-            self.palette.entries[i] = cl.mean
+        Self{
+            palette: palette,
+            colormap: colormap,
+            dithering_level: 1.0,
         }
     }
 
@@ -126,20 +116,19 @@ impl QuantizeResult {
             return Error::BufferTooSmall
         }
 
-        let cm = Colormap::new(&self.palette);
-
-        self.remap_image_no_dither(image, buf, &cm);
-        self.fix_palette(image, buf);
+        self.remap_image_no_dither(image, buf);
+        self.colormap.fix(image, buf);
 
         if self.dithering_level > 0.0 {
-            let cm = Colormap::new(&self.palette);
-            self.dither_image(image, buf, &cm);
+            self.dither_image(image, buf);
         }
+
+        self.colormap.generate_palette(&mut self.palette);
 
         Error::Ok
     }
 
-    fn remap_image_no_dither(&self, image: &Image, buf: &mut [u8], cm: &Colormap) {
+    fn remap_image_no_dither(&self, image: &Image, buf: &mut [u8]) {
         let mut last_ind = 0;
 
         for point in 0..image.width*image.height {
@@ -151,49 +140,13 @@ impl QuantizeResult {
             let b = pix[2] as f32;
             let a = pix[3] as f32;
 
-            last_ind = cm.nearest_ind(&[r, g, b, a], last_ind);
+            last_ind = self.colormap.nearest_ind(&[r, g, b, a], last_ind);
 
             buf[point] = last_ind as u8;
         }
     }
 
-    fn fix_palette(&mut self, image: &Image, buf: &[u8]) {
-        let mut colors = [[0usize; 4]; 256];
-        let mut counts = [0usize; 256];
-
-        for point in 0..image.width*image.height {
-            let data_point = point*4;
-
-            let pix = &image.data[data_point..data_point+4];
-            let r = pix[0] as usize;
-            let g = pix[1] as usize;
-            let b = pix[2] as usize;
-            let a = pix[3] as usize;
-
-            let ind = buf[point] as usize;
-
-            let color = &mut colors[ind];
-            color[0] += r;
-            color[1] += g;
-            color[2] += b;
-            color[3] += a;
-            counts[ind] += 1;
-        }
-
-        for (i, c) in colors.iter().enumerate() {
-            let count = counts[i];
-
-            if count > 0 {
-                let pal_c = &mut self.palette.entries[i];
-                pal_c.r = (c[0] / count) as u8;
-                pal_c.g = (c[1] / count) as u8;
-                pal_c.b = (c[2] / count) as u8;
-                pal_c.a = (c[3] / count) as u8;
-            }
-        }
-    }
-
-    fn dither_image(&self, image: &Image, buf: &mut [u8], cm: &Colormap) {
+    fn dither_image(&self, image: &Image, buf: &mut [u8]) {
         let error_size = image.width+2;
         let mut error_curr = vec![[0f32; 4]; error_size].into_boxed_slice();
         let mut error_next = vec![[0f32; 4]; error_size].into_boxed_slice();
@@ -231,10 +184,10 @@ impl QuantizeResult {
                 let da = (a + err_pix[3]).clamp(0.0, 255.0);
 
                 let mut pal_ind = buf[point] as usize;
-                pal_ind = cm.nearest_ind(&[dr, dg, db, da], pal_ind);
+                pal_ind = self.colormap.nearest_ind(&[dr, dg, db, da], pal_ind);
                 buf[point] = pal_ind as u8;
 
-                let pal_pix = cm.color(pal_ind);
+                let pal_pix = self.colormap.color(pal_ind);
                 let err_r = (r - pal_pix[0]) / 16.0 * self.dithering_level;
                 let err_g = (g - pal_pix[1]) / 16.0 * self.dithering_level;
                 let err_b = (b - pal_pix[2]) / 16.0 * self.dithering_level;
