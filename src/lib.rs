@@ -1,3 +1,4 @@
+mod histogram;
 mod cluster;
 mod color;
 mod colormap;

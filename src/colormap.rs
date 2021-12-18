@@ -2,7 +2,6 @@ use std::cmp::Ordering;
 
 use crate::quantize::Palette;
 use crate::cluster::Cluster;
-use crate::image::Image;
 
 macro_rules! color_dist {
     ($c1: expr, $c2: expr) => {
@@ -25,29 +24,21 @@ impl Colormap {
     pub fn new(clusters: &Vec::<Cluster>) -> Self {
         let mut entries = vec![];
 
-        let mut ci = 0;
+        let mut ind = 0;
         entries.resize_with(clusters.len() as usize, ||{
-            let c = &clusters[ci];
+            let c = &clusters[ind];
             let e = ColormapEntry{
-                color: [c.mean.r as f32, c.mean.g as f32, c.mean.b as f32, c.mean.a as f32],
-                popularity: c.colors.len(),
+                color: [c.mean[0] as f32, c.mean[1] as f32, c.mean[2] as f32, c.mean[3] as f32],
+                popularity: c.weight,
                 radius: 0.0,
             };
-            ci += 1;
+            ind += 1;
             e
-        });
-
-        entries.sort_by(|e1, e2| {
-            match e1.color[3].partial_cmp(&e2.color[3]).unwrap_or(Ordering::Equal) {
-                Ordering::Equal => {
-                    e2.popularity.cmp(&e1.popularity)
-                },
-                o => o,
-            }
         });
 
         let mut res = Self{0: entries};
         res.calc_radiuses();
+        res.kmeans(clusters);
         res
     }
 
@@ -71,41 +62,53 @@ impl Colormap {
         }
     }
 
-    pub fn fix(&mut self, image: &Image, indexes: &[u8]) {
-        let mut colors = [[0usize; 4]; 256];
-        let mut counts = [0usize; 256];
+    fn sort(&mut self) {
+        self.0.sort_by(|e1, e2| {
+            match e1.color[3].partial_cmp(&e2.color[3]).unwrap_or(Ordering::Equal) {
+                Ordering::Equal => e2.popularity.cmp(&e1.popularity),
+                o => o,
+            }
+        });
+    }
 
-        for point in 0..image.width*image.height {
-            let data_point = point*4;
+    fn kmeans(&mut self, clusters: &Vec::<Cluster>) {
+        let mut colors = [[0f32; 4]; 256];
+        let mut weights = [0f32; 256];
 
-            let pix = &image.data[data_point..data_point+4];
-            let r = pix[0] as usize;
-            let g = pix[1] as usize;
-            let b = pix[2] as usize;
-            let a = pix[3] as usize;
+        for cluster in clusters.iter() {
+            for entry in cluster.entries.iter() {
+                let r = entry.color[0] as f32;
+                let g = entry.color[1] as f32;
+                let b = entry.color[2] as f32;
+                let a = entry.color[3] as f32;
 
-            let ind = indexes[point] as usize;
+                let weight = entry.weight as f32;
 
-            let color = &mut colors[ind];
-            color[0] += r;
-            color[1] += g;
-            color[2] += b;
-            color[3] += a;
-            counts[ind] += 1;
-        }
+                let ind = self.nearest_ind(&[r, g, b, a], 0);
 
-        for (i, c) in colors.iter().enumerate() {
-            let count = counts[i];
+                let color = &mut colors[ind];
+                color[0] += r * weight;
+                color[1] += g * weight;
+                color[2] += b * weight;
+                color[3] += a * weight;
 
-            if count > 0 {
-                let pal_c = &mut self.0[i];
-                pal_c.color[0] = (c[0] / count) as f32;
-                pal_c.color[1] = (c[1] / count) as f32;
-                pal_c.color[2] = (c[2] / count) as f32;
-                pal_c.color[3] = (c[3] / count) as f32;
+                weights[ind] += weight;
             }
         }
 
+        for (i, c) in colors.iter().enumerate() {
+            let weight = weights[i];
+
+            if weight > 0.0 {
+                let pal_c = &mut self.0[i];
+                pal_c.color[0] = c[0] / weight;
+                pal_c.color[1] = c[1] / weight;
+                pal_c.color[2] = c[2] / weight;
+                pal_c.color[3] = c[3] / weight;
+            }
+        }
+
+        self.sort();
         self.calc_radiuses()
     }
 

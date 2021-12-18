@@ -1,5 +1,6 @@
 use std::collections::BinaryHeap;
 
+use crate::histogram::Historgram;
 use crate::cluster::Cluster;
 use crate::color::Color;
 use crate::error::Error;
@@ -30,11 +31,19 @@ pub struct QuantizeResult {
 
 impl QuantizeResult {
     pub fn quantize(image: &Image, attr: &Options) -> Self {
+        let mut hist = Historgram::new();
+        hist.add_image(image);
+
+        Self::quantize_histogram(&hist, attr)
+    }
+
+    pub fn quantize_histogram(hist: &Historgram, attr: &Options) -> Self {
         let mut heap = BinaryHeap::new();
         let mut clusters = Vec::<Cluster>::with_capacity(attr.max_colors as usize);
 
-        let mut root = Cluster::populate(image);
-        root.calc_mean_and_priority();
+        let mut root = Cluster::from_histogram(&hist);
+        root.calc_mean_and_weight();
+        root.calc_widest_and_priority();
 
         // If priority is zero, then all colors in cluster are the same
         if root.priority > 0 {
@@ -53,15 +62,15 @@ impl QuantizeResult {
 
             let (mut c1, mut c2) = to_split.split();
 
-            c1.calc_mean_and_priority();
-            c2.calc_mean_and_priority();
+            c1.calc_mean_and_weight();
+            c2.calc_mean_and_weight();
 
-            if c1.colors.is_empty() {
+            if c1.entries.is_empty() {
                 clusters.push(c2);
                 continue;
             }
 
-            if c2.colors.is_empty() {
+            if c2.entries.is_empty() {
                 clusters.push(c1);
                 continue;
             }
@@ -76,6 +85,9 @@ impl QuantizeResult {
                 clusters.append(&mut heap.into_vec());
                 break
             }
+
+            c1.calc_widest_and_priority();
+            c2.calc_widest_and_priority();
 
             if c1.priority > 0 {
                 heap.push(c1);
@@ -116,11 +128,10 @@ impl QuantizeResult {
             return Error::BufferTooSmall
         }
 
-        self.remap_image_no_dither(image, buf);
-        self.colormap.fix(image, buf);
-
         if self.dithering_level > 0.0 {
-            self.dither_image(image, buf);
+            self.remap_image_dither(image, buf);
+        } else {
+            self.remap_image_no_dither(image, buf);
         }
 
         self.colormap.generate_palette(&mut self.palette);
@@ -146,7 +157,9 @@ impl QuantizeResult {
         }
     }
 
-    fn dither_image(&self, image: &Image, buf: &mut [u8]) {
+    fn remap_image_dither(&self, image: &Image, buf: &mut [u8]) {
+        let mut last_ind = 0;
+
         let error_size = image.width+2;
         let mut error_curr = vec![[0f32; 4]; error_size].into_boxed_slice();
         let mut error_next = vec![[0f32; 4]; error_size].into_boxed_slice();
@@ -183,11 +196,10 @@ impl QuantizeResult {
                 let db = (b + err_pix[2]).clamp(0.0, 255.0);
                 let da = (a + err_pix[3]).clamp(0.0, 255.0);
 
-                let mut pal_ind = buf[point] as usize;
-                pal_ind = self.colormap.nearest_ind(&[dr, dg, db, da], pal_ind);
-                buf[point] = pal_ind as u8;
+                last_ind = self.colormap.nearest_ind(&[dr, dg, db, da], last_ind);
+                buf[point] = last_ind as u8;
 
-                let pal_pix = self.colormap.color(pal_ind);
+                let pal_pix = self.colormap.color(last_ind);
                 let err_r = (r - pal_pix[0]) / 16.0 * self.dithering_level;
                 let err_g = (g - pal_pix[1]) / 16.0 * self.dithering_level;
                 let err_b = (b - pal_pix[2]) / 16.0 * self.dithering_level;
