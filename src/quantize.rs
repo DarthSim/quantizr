@@ -191,10 +191,10 @@ impl QuantizeResult {
                 let a = pix[3] as f32;
 
                 let err_pix = &error_curr[err_ind];
-                let dr = (r + err_pix[0]).clamp(0.0, 255.0);
-                let dg = (g + err_pix[1]).clamp(0.0, 255.0);
-                let db = (b + err_pix[2]).clamp(0.0, 255.0);
-                let da = (a + err_pix[3]).clamp(0.0, 255.0);
+                let dr = (r + err_pix[0]).clamp(-0.1, 255.1);
+                let dg = (g + err_pix[1]).clamp(-0.1, 255.1);
+                let db = (b + err_pix[2]).clamp(-0.1, 255.1);
+                let da = (a + err_pix[3]).clamp(-0.1, 255.1);
 
                 last_ind = self.colormap.nearest_ind(&[dr, dg, db, da], last_ind);
                 buf[point] = last_ind as u8;
