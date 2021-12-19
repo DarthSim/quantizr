@@ -17,9 +17,9 @@ pub struct HistogramEntry {
     pub weight: u32,
 }
 
-pub struct Historgram(pub HashMap<usize, HistogramEntry>);
+pub struct Histogram(pub HashMap<usize, HistogramEntry>);
 
-impl Historgram {
+impl Histogram {
     pub fn new() -> Self {
         Self{0: HashMap::new()}
     }

@@ -1,6 +1,6 @@
 use std::collections::BinaryHeap;
 
-use crate::histogram::Historgram;
+use crate::histogram::Histogram;
 use crate::cluster::Cluster;
 use crate::color::Color;
 use crate::error::Error;
@@ -31,13 +31,13 @@ pub struct QuantizeResult {
 
 impl QuantizeResult {
     pub fn quantize(image: &Image, attr: &Options) -> Self {
-        let mut hist = Historgram::new();
+        let mut hist = Histogram::new();
         hist.add_image(image);
 
         Self::quantize_histogram(&hist, attr)
     }
 
-    pub fn quantize_histogram(hist: &Historgram, attr: &Options) -> Self {
+    pub fn quantize_histogram(hist: &Histogram, attr: &Options) -> Self {
         let mut heap = BinaryHeap::new();
         let mut clusters = Vec::<Cluster>::with_capacity(attr.max_colors as usize);
 

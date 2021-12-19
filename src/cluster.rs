@@ -1,6 +1,6 @@
 use std::cmp::{Ord,Ordering};
 
-use crate::histogram::{Historgram, HistogramEntry};
+use crate::histogram::{Histogram, HistogramEntry};
 
 pub struct Cluster {
     pub entries: Vec<HistogramEntry>,
@@ -41,7 +41,7 @@ impl Cluster {
         }
     }
 
-    pub fn from_histogram(hist: &Historgram) -> Self {
+    pub fn from_histogram(hist: &Histogram) -> Self {
         let mut entries = Vec::with_capacity(hist.0.len());
 
         for entry in hist.0.values() {
