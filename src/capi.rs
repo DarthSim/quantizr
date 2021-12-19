@@ -1,5 +1,6 @@
 use std::slice;
 
+use crate::histogram::Histogram;
 use crate::quantize::QuantizeResult;
 use crate::palette::Palette;
 use crate::image::Image;
@@ -46,8 +47,24 @@ pub unsafe extern fn quantizr_create_image_rgba(data: *const u8, width: i32, hei
 }
 
 #[no_mangle]
+pub unsafe extern fn quantizr_create_histogram() -> *mut Histogram {
+    Box::into_raw(Box::new(Histogram::new()))
+}
+
+#[no_mangle]
+pub unsafe extern fn quantizr_histogram_add_image(hist: *mut Histogram, image: *const Image) -> QuantizrError {
+    (*hist).add_image(&(*image));
+    QuantizrError::QuantizrOk
+}
+
+#[no_mangle]
 pub unsafe extern fn quantizr_quantize(image: *const Image, options: *const Options) -> *mut QuantizeResult {
     Box::into_raw(Box::new(QuantizeResult::quantize(&(*image), &(*options))))
+}
+
+#[no_mangle]
+pub unsafe extern fn quantizr_quantize_histogram(hist: *const Histogram, options: *const Options) -> *mut QuantizeResult {
+    Box::into_raw(Box::new(QuantizeResult::quantize_histogram(&(*hist), &(*options))))
 }
 
 #[no_mangle]
@@ -70,6 +87,11 @@ pub unsafe extern fn quantizr_remap(result: *mut QuantizeResult, image: *mut Ima
 #[no_mangle]
 pub unsafe extern fn quantizr_free_result(result: *mut QuantizeResult) {
     std::mem::drop(Box::from_raw(result))
+}
+
+#[no_mangle]
+pub unsafe extern fn quantizr_free_histogram(hist: *mut Histogram) {
+    std::mem::drop(Box::from_raw(hist))
 }
 
 #[no_mangle]
@@ -108,6 +130,7 @@ impl std::convert::From<QuantizrError> for LiqError {
 
 type LiqAttr = Options;
 type LiqImage = Image;
+type LiqHistogram = Histogram;
 type LiqResult = QuantizeResult;
 type LiqPalette = Palette;
 
@@ -139,8 +162,24 @@ pub unsafe extern fn liq_image_create_rgba(_options: *const LiqAttr, data: *cons
 }
 
 #[no_mangle]
+pub unsafe extern fn liq_histogram_create(_options: *const LiqAttr) -> *mut LiqHistogram {
+    quantizr_create_histogram()
+}
+
+#[no_mangle]
+pub unsafe extern fn liq_histogram_add_image(hist: *mut LiqHistogram, _attr: *mut LiqAttr, image: *const LiqImage) -> LiqError {
+    quantizr_histogram_add_image(hist, image).into()
+}
+
+#[no_mangle]
 pub unsafe extern fn liq_image_quantize(image: *const LiqImage, options: *const LiqAttr, result: *mut *mut LiqResult) -> LiqError {
     *result = quantizr_quantize(image, options);
+    LiqError::LiqOk
+}
+
+#[no_mangle]
+pub unsafe extern fn liq_histogram_quantize(hist: *const LiqHistogram, options: *const LiqAttr, result: *mut *mut LiqResult) -> LiqError {
+    *result = quantizr_quantize_histogram(hist, options);
     LiqError::LiqOk
 }
 
@@ -162,6 +201,11 @@ pub unsafe extern fn liq_write_remapped_image(result: *mut LiqResult, image: *mu
 #[no_mangle]
 pub extern fn liq_result_destroy(result: *mut LiqResult) {
     unsafe { std::mem::drop(Box::from_raw(result)) };
+}
+
+#[no_mangle]
+pub extern fn liq_histogram_destroy(hist: *mut LiqHistogram) {
+    unsafe { std::mem::drop(Box::from_raw(hist)) };
 }
 
 #[no_mangle]
