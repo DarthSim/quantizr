@@ -1,6 +1,7 @@
 use std::slice;
 
-use crate::quantize::{QuantizeResult,Palette};
+use crate::quantize::QuantizeResult;
+use crate::palette::Palette;
 use crate::image::Image;
 use crate::options::Options;
 use crate::error::Error;

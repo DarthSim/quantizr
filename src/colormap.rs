@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::quantize::Palette;
+use crate::palette::Palette;
 use crate::cluster::Cluster;
 
 macro_rules! color_dist {

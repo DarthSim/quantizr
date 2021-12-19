@@ -2,26 +2,11 @@ use std::collections::BinaryHeap;
 
 use crate::histogram::Histogram;
 use crate::cluster::Cluster;
-use crate::color::Color;
+use crate::palette::Palette;
 use crate::error::Error;
 use crate::image::Image;
 use crate::options::Options;
 use crate::colormap::Colormap;
-
-#[repr(C)]
-pub struct Palette {
-    pub count: u32,
-    pub entries: [Color; 256],
-}
-
-impl Default for Palette {
-    fn default() -> Self {
-        Self{
-            count: 0,
-            entries: [Color::default(); 256],
-        }
-    }
-}
 
 pub struct QuantizeResult {
     pub palette: Palette,
