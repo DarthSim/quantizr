@@ -117,10 +117,10 @@ impl Colormap {
 
         for (i, e) in self.0.iter().enumerate() {
             let c = &mut palette.entries[i];
-            c.r = e.color[0].clamp(0.0, 255.0) as u8;
-            c.g = e.color[1].clamp(0.0, 255.0) as u8;
-            c.b = e.color[2].clamp(0.0, 255.0) as u8;
-            c.a = e.color[3].clamp(0.0, 255.0) as u8;
+            c.r = e.color[0].round().clamp(0.0, 255.0) as u8;
+            c.g = e.color[1].round().clamp(0.0, 255.0) as u8;
+            c.b = e.color[2].round().clamp(0.0, 255.0) as u8;
+            c.a = e.color[3].round().clamp(0.0, 255.0) as u8;
         }
     }
 
