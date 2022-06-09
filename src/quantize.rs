@@ -23,56 +23,63 @@ impl QuantizeResult {
     }
 
     pub fn quantize_histogram(hist: &Histogram, attr: &Options) -> Self {
-        let mut clusters = Vec::<Cluster>::with_capacity(attr.max_colors as usize);
-
-        let root = Cluster::from_histogram(&hist);
-
-        clusters.push(root);
+        let colormap: Colormap;
 
         let max_colors_f64 = attr.max_colors as f64;
         let max_colors_usize = attr.max_colors as usize;
 
-        while clusters.len() < max_colors_usize {
-            // We want to split bigger clusters in the beginning,
-            // and clusters with bigger chan_diff in the end
-            let weight_ratio = 0.75 - (clusters.len() as f64 + 1.0) / max_colors_f64 / 2.0;
+        if hist.0.len() <= max_colors_usize {
+            colormap = Colormap::from_histogram(&hist);
+        } else {
+            let mut clusters = Vec::<Cluster>::with_capacity(attr.max_colors as usize);
 
-            // Get the best cluster to split
-            let to_split_opt = clusters.iter().enumerate()
-                .filter(|(_, c)| c.chan_diff > 0.0)
-                .map(|(i, c)|{
-                    let priority = c.chan_diff * c.weight.powf(weight_ratio);
-                    (i, priority)
-                })
-                .max_by(|&(_, a), &(_, b)| a.partial_cmp(&b).unwrap_or(Ordering::Equal))
-                .map(|(i, _)| clusters.swap_remove(i) );
+            let root = Cluster::from_histogram(&hist);
 
-            // If nothing there, this means everything is ready
-            let mut to_split = match to_split_opt {
-                Some(c) => c,
-                None => break,
-            };
+            clusters.push(root);
 
-            let (mut c1, mut c2) = to_split.split();
+            while clusters.len() < max_colors_usize {
+                // We want to split bigger clusters in the beginning,
+                // and clusters with bigger chan_diff in the end
+                let weight_ratio = 0.75 - (clusters.len() as f64 + 1.0) / max_colors_f64 / 2.0;
 
-            if c1.entries.is_empty() {
-                c2.chan_diff = 0.0;
-                clusters.push(c2);
-                continue;
-            }
+                // Get the best cluster to split
+                let to_split_opt = clusters.iter().enumerate()
+                    .filter(|(_, c)| c.chan_diff > 0.0)
+                    .map(|(i, c)|{
+                        let priority = c.chan_diff * c.weight.powf(weight_ratio);
+                        (i, priority)
+                    })
+                    .max_by(|&(_, a), &(_, b)| a.partial_cmp(&b).unwrap_or(Ordering::Equal))
+                    .map(|(i, _)| clusters.swap_remove(i) );
 
-            if c2.entries.is_empty() {
-                c1.chan_diff = 0.0;
+                // If nothing there, this means everything is ready
+                let mut to_split = match to_split_opt {
+                    Some(c) => c,
+                    None => break,
+                };
+
+                let (mut c1, mut c2) = to_split.split();
+
+                if c1.entries.is_empty() {
+                    c2.chan_diff = 0.0;
+                    clusters.push(c2);
+                    continue;
+                }
+
+                if c2.entries.is_empty() {
+                    c1.chan_diff = 0.0;
+                    clusters.push(c1);
+                    continue;
+                }
+
                 clusters.push(c1);
-                continue;
+                clusters.push(c2);
             }
 
-            clusters.push(c1);
-            clusters.push(c2);
+            colormap = Colormap::from_clusters(&clusters);
         }
 
         let mut palette = Palette::default();
-        let colormap = Colormap::new(&clusters);
         colormap.generate_palette(&mut palette);
 
         Self{

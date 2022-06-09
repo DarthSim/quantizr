@@ -4,6 +4,7 @@ use vpsearch;
 
 use crate::palette::Palette;
 use crate::cluster::Cluster;
+use crate::histogram::Histogram;
 
 struct ColormapEntry;
 impl vpsearch::MetricSpace<ColormapEntry> for [f32; 4] {
@@ -24,7 +25,9 @@ pub struct Colormap {
 }
 
 impl Colormap {
-    pub fn new(clusters: &Vec::<Cluster>) -> Self {
+    pub fn from_clusters(clusters: &Vec::<Cluster>) -> Self {
+        assert!(clusters.len() <= 256);
+
         let mut total_weight = 0f32;
 
         let mut entries: Vec::<[f32; 4]> = clusters.iter().map(|c|{
@@ -46,6 +49,24 @@ impl Colormap {
             entries: entries,
             tree: tree,
             error: error,
+        }
+    }
+
+    pub fn from_histogram(hist: &Histogram) -> Self {
+        assert!(hist.0.len() <= 256);
+
+        let mut entries: Vec::<[f32; 4]> = hist.0.values().map(|e|{
+            [e.color[0] as f32, e.color[1] as f32, e.color[2] as f32, e.color[3] as f32]
+        }).collect();
+
+        sort_colors(&mut entries);
+
+        let tree = vpsearch::Tree::new(&entries);
+
+        Self{
+            entries: entries,
+            tree: tree,
+            error: 0f32,
         }
     }
 
