@@ -36,11 +36,13 @@ impl Colormap {
         }).collect();
 
         let mut tree = vpsearch::Tree::new(&entries);
+        let mut error = kmeans(clusters, &mut entries, &tree, total_weight);
 
-        kmeans(clusters, &mut entries, &tree, total_weight);
-        tree = vpsearch::Tree::new(&entries);
+        if error > 0.001 {
+            tree = vpsearch::Tree::new(&entries);
+            error = kmeans(clusters, &mut entries, &tree, total_weight);
+        }
 
-        let error = kmeans(clusters, &mut entries, &tree, total_weight);
         sort_colors(&mut entries);
 
         tree = vpsearch::Tree::new(&entries);
