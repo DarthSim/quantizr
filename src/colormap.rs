@@ -15,84 +15,38 @@ impl vpsearch::MetricSpace<ColormapEntry> for [f32; 4] {
     }
 }
 
+type ColormapTree = vpsearch::Tree::<[f32; 4], ColormapEntry>;
+
 pub struct Colormap {
     entries: Vec<[f32; 4]>,
-    tree: vpsearch::Tree::<[f32; 4], ColormapEntry>,
+    tree: ColormapTree,
     pub error: f32,
-    total_weight: f32,
 }
 
 impl Colormap {
     pub fn new(clusters: &Vec::<Cluster>) -> Self {
         let mut total_weight = 0f32;
 
-        let entries: Vec::<[f32; 4]> = clusters.iter().map(|c|{
+        let mut entries: Vec::<[f32; 4]> = clusters.iter().map(|c|{
             total_weight += c.weight as f32;
             [c.mean[0] as f32, c.mean[1] as f32, c.mean[2] as f32, c.mean[3] as f32]
         }).collect();
 
-        let tree = vpsearch::Tree::new(&entries);
+        let mut tree = vpsearch::Tree::new(&entries);
 
-        let mut res = Self{
+        kmeans(clusters, &mut entries, &tree, total_weight);
+        tree = vpsearch::Tree::new(&entries);
+
+        let error = kmeans(clusters, &mut entries, &tree, total_weight);
+        sort_colors(&mut entries);
+
+        tree = vpsearch::Tree::new(&entries);
+
+        Self{
             entries: entries,
             tree: tree,
-            error: 0f32,
-            total_weight: total_weight,
-        };
-
-        res.kmeans(clusters);
-        res.tree = vpsearch::Tree::new(&res.entries);
-
-        res.kmeans(clusters);
-        res.sort();
-
-        res.tree = vpsearch::Tree::new(&res.entries);
-
-        res
-    }
-
-    fn sort(&mut self) {
-        self.entries.sort_unstable_by(|e1, e2| {
-            e1[3].partial_cmp(&e2[3]).unwrap_or(Ordering::Equal)
-        });
-    }
-
-    fn kmeans(&mut self, clusters: &Vec::<Cluster>) {
-        let mut colors = [[0f32; 4]; 256];
-        let mut weights = [0f32; 256];
-
-        let mut total_err = 0f32;
-
-        for cluster in clusters.iter() {
-            for entry in cluster.entries.iter() {
-                let hist_color = [
-                    entry.color[0] as f32,
-                    entry.color[1] as f32,
-                    entry.color[2] as f32,
-                    entry.color[3] as f32,
-                ];
-                let weight = entry.weight as f32;
-
-                let (ind, err) = self.nearest_ind(&hist_color);
-
-                let color = &mut colors[ind];
-                add_color(color, &hist_color, weight);
-
-                weights[ind] += weight;
-                total_err += err*err;
-            }
+            error: error,
         }
-
-        for ((pal_c, c), weight) in self.entries.iter_mut().zip(colors).zip(weights) {
-            if weight > 0.0 {
-                pal_c[0] = c[0] / weight;
-                pal_c[1] = c[1] / weight;
-                pal_c[2] = c[2] / weight;
-                pal_c[3] = c[3] / weight;
-            }
-        }
-
-        self.error = total_err / self.total_weight;
     }
 
     pub fn generate_palette(&self, palette: &mut Palette) {
@@ -115,6 +69,50 @@ impl Colormap {
     pub fn color(&self, ind: usize) -> &[f32; 4] {
         &self.entries[ind]
     }
+}
+
+fn kmeans(clusters: &Vec::<Cluster>, entries: &mut Vec<[f32; 4]>, tree: &ColormapTree, total_weight: f32) -> f32 {
+    let mut colors = [[0f32; 4]; 256];
+    let mut weights = [0f32; 256];
+
+    let mut total_err = 0f32;
+
+    for cluster in clusters.iter() {
+        for entry in cluster.entries.iter() {
+            let hist_color = [
+                entry.color[0] as f32,
+                entry.color[1] as f32,
+                entry.color[2] as f32,
+                entry.color[3] as f32,
+            ];
+            let weight = entry.weight as f32;
+
+            let (ind, err) = tree.find_nearest(&hist_color);
+
+            let color = &mut colors[ind];
+            add_color(color, &hist_color, weight);
+
+            weights[ind] += weight;
+            total_err += err*err;
+        }
+    }
+
+    for ((pal_c, c), weight) in entries.iter_mut().zip(colors).zip(weights) {
+        if weight > 0.0 {
+            pal_c[0] = c[0] / weight;
+            pal_c[1] = c[1] / weight;
+            pal_c[2] = c[2] / weight;
+            pal_c[3] = c[3] / weight;
+        }
+    }
+
+    return total_err / total_weight;
+}
+
+fn sort_colors(entries: &mut Vec<[f32; 4]>) {
+    entries.sort_unstable_by(|e1, e2| {
+        e1[3].partial_cmp(&e2[3]).unwrap_or(Ordering::Equal)
+    });
 }
 
 #[cfg(target_arch = "x86_64")]
