@@ -79,6 +79,55 @@ impl Cluster {
         self.widest_chan = chan as u8;
     }
 
+    pub fn split_into(self, max_colors: usize) -> Vec<Self> {
+        let max_colors_f64 = max_colors as f64;
+
+        let mut clusters = Vec::<Cluster>::with_capacity(max_colors);
+
+        clusters.push(self);
+
+        while clusters.len() < max_colors {
+            // We want to split bigger clusters in the beginning,
+            // and clusters with bigger chan_diff in the end
+            let weight_ratio = 0.75 - (clusters.len() as f64 + 1.0) / max_colors_f64 / 2.0;
+
+            // Get the best cluster to split
+            let to_split_opt = clusters.iter().enumerate()
+                .filter(|(_, c)| c.chan_diff > 0.0)
+                .map(|(i, c)|{
+                    let priority = c.chan_diff * c.weight.powf(weight_ratio);
+                    (i, priority)
+                })
+                .max_by(|&(_, a), &(_, b)| a.partial_cmp(&b).unwrap_or(Ordering::Equal))
+                .map(|(i, _)| clusters.swap_remove(i) );
+
+            // If nothing there, this means everything is ready
+            let mut to_split = match to_split_opt {
+                Some(c) => c,
+                None => break,
+            };
+
+            let (mut c1, mut c2) = to_split.split();
+
+            if c1.entries.is_empty() {
+                c2.chan_diff = 0.0;
+                clusters.push(c2);
+                continue;
+            }
+
+            if c2.entries.is_empty() {
+                c1.chan_diff = 0.0;
+                clusters.push(c1);
+                continue;
+            }
+
+            clusters.push(c1);
+            clusters.push(c2);
+        }
+
+        clusters
+    }
+
     pub fn split(&mut self) -> (Cluster, Cluster) {
         let widest_chan = self.widest_chan as usize;
         let widest_chan_mean = self.mean[widest_chan];

@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-
 use crate::histogram::Histogram;
 use crate::cluster::Cluster;
 use crate::palette::Palette;
@@ -25,56 +23,13 @@ impl QuantizeResult {
     pub fn quantize_histogram(hist: &Histogram, attr: &Options) -> Self {
         let colormap: Colormap;
 
-        let max_colors_f64 = attr.max_colors as f64;
-        let max_colors_usize = attr.max_colors as usize;
+        let max_colors = attr.max_colors as usize;
 
-        if hist.0.len() <= max_colors_usize {
+        if hist.0.len() <= max_colors {
             colormap = Colormap::from_histogram(&hist);
         } else {
-            let mut clusters = Vec::<Cluster>::with_capacity(attr.max_colors as usize);
-
             let root = Cluster::from_histogram(&hist);
-
-            clusters.push(root);
-
-            while clusters.len() < max_colors_usize {
-                // We want to split bigger clusters in the beginning,
-                // and clusters with bigger chan_diff in the end
-                let weight_ratio = 0.75 - (clusters.len() as f64 + 1.0) / max_colors_f64 / 2.0;
-
-                // Get the best cluster to split
-                let to_split_opt = clusters.iter().enumerate()
-                    .filter(|(_, c)| c.chan_diff > 0.0)
-                    .map(|(i, c)|{
-                        let priority = c.chan_diff * c.weight.powf(weight_ratio);
-                        (i, priority)
-                    })
-                    .max_by(|&(_, a), &(_, b)| a.partial_cmp(&b).unwrap_or(Ordering::Equal))
-                    .map(|(i, _)| clusters.swap_remove(i) );
-
-                // If nothing there, this means everything is ready
-                let mut to_split = match to_split_opt {
-                    Some(c) => c,
-                    None => break,
-                };
-
-                let (mut c1, mut c2) = to_split.split();
-
-                if c1.entries.is_empty() {
-                    c2.chan_diff = 0.0;
-                    clusters.push(c2);
-                    continue;
-                }
-
-                if c2.entries.is_empty() {
-                    c1.chan_diff = 0.0;
-                    clusters.push(c1);
-                    continue;
-                }
-
-                clusters.push(c1);
-                clusters.push(c2);
-            }
+            let clusters = root.split_into(max_colors);
 
             colormap = Colormap::from_clusters(&clusters);
         }
