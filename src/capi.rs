@@ -78,6 +78,11 @@ pub unsafe extern fn quantizr_get_palette(result: *mut QuantizeResult) -> *const
 }
 
 #[no_mangle]
+pub unsafe extern fn quantizr_get_error(result: *mut QuantizeResult) -> f32 {
+    (*result).error
+}
+
+#[no_mangle]
 pub unsafe extern fn quantizr_remap(result: *mut QuantizeResult, image: *mut Image, buffer: *mut u8, buffer_size: usize) -> QuantizrError {
     let mut buf = slice::from_raw_parts_mut(buffer, buffer_size);
 

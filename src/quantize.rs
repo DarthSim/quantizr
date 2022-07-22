@@ -8,6 +8,7 @@ use crate::colormap::Colormap;
 
 pub struct QuantizeResult {
     pub palette: Palette,
+    pub error: f32,
     pub dithering_level: f32,
     colormap: Colormap,
 }
@@ -39,6 +40,7 @@ impl QuantizeResult {
 
         Self{
             palette: palette,
+            error: colormap.error,
             colormap: colormap,
             dithering_level: 1.0,
         }
@@ -92,8 +94,8 @@ impl QuantizeResult {
         let mut error_next = vec![[0f32; 4]; error_size];
 
         let dithering_coeff = self.dithering_level * 15.0 / 16.0 / 16.0;
-        let err_threshold = self.colormap.error;
-        // println!("Err threshold {}", self.colormap.error);
+        let err_threshold = self.error;
+        // println!("Err threshold {}", self.error);
 
         let mut x_reverse = true;
 
