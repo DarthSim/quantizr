@@ -23,7 +23,7 @@ QuantizrOptions *opts = quantizr_new_options();
 // (optional) Set desired number of colors. The default number is 256.
 // This function returns QUANTIZR_VALUE_OUT_OF_RANGE if provided number is less than 2 or
 // greater than 255.
-quantizr_set_max_colors(128);
+quantizr_set_max_colors(opts, 128);
 // Create new image object.
 // You're responsible for freeing it when the work is done (see below).
 // image_data is unsigned char array with raw RGBA pixels.
@@ -66,7 +66,7 @@ QuantizrOptions *opts = quantizr_new_options();
 // (optional) Set desired number of colors. The default number is 256.
 // This function returns QUANTIZR_VALUE_OUT_OF_RANGE if provided number is less than 2 or
 // greater than 255.
-quantizr_set_max_colors(128);
+quantizr_set_max_colors(opts, 128);
 // Create new histogram.
 // You're responsible for freeing it when the work is done (see below).
 QuantizrHistogram *hist = quantizr_create_histogram();
@@ -106,9 +106,9 @@ quantizr_free_options(opts);
 
 ## Using with [libvips](https://github.com/libvips/libvips)
 
-libvips currently doesn't have Quantizr support. That's why Quantizr partly implements libimagequant API enough to be used with libvips.
+libvips 8.13+ has first-class support of Quantizr.
 
-Just link or rename `/usr/local/lib/pkgconfig/quantizr.pc` to `/usr/local/lib/pkgconfig/imagequant.pc`, and `/usr/local/include/quantizr/quantizr.h` to `/usr/local/include/quantizr/libimagequant.h`, and libvips will see Quantizr as libimagequant.
+Quantizr 1.3+ can't be used with earlier versions of libvips. If you want to use Quantizr with an earlier version of libvips, use Quantizr 1.2 and follow [the instructions](https://github.com/DarthSim/quantizr/tree/v1.2.0#using-with-libvips).
 
 ## Author
 
