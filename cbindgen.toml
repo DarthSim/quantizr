@@ -14,12 +14,6 @@ language = "C"
 "Error" = "QuantizrError"
 "Color" = "QuantizrColor"
 "Palette" = "QuantizrPalette"
-"LiqAttr" = "liq_attr"
-"LiqResult" = "liq_result"
-"LiqHistogram" = "liq_histogram"
-"LiqImage" = "liq_image"
-"LiqError" = "liq_error"
-"LiqPalette" = "liq_palette"
 
 [enum]
 rename_variants = "ScreamingSnakeCase"
