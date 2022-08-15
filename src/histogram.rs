@@ -13,18 +13,23 @@ macro_rules! hist_key {
 }
 
 #[derive(Clone,Copy)]
-pub struct HistogramEntry {
+pub(crate) struct HistogramEntry {
     pub color: [u8; 4],
     pub weight: u32,
 }
 
-pub struct Histogram(pub HashMap<u64, HistogramEntry, ColorHasher>);
+/// Color histogram
+pub struct Histogram{
+    pub(crate) map: HashMap<u64, HistogramEntry, ColorHasher>,
+}
 
 impl Histogram {
+    /// Creates new empty [`Histogram`]
     pub fn new() -> Self {
-        Self{0: HashMap::with_hasher(ColorHasher(0))}
+        Self{map: HashMap::with_hasher(ColorHasher(0))}
     }
 
+    /// Adds colors from [`Image`] to the histogram
     pub fn add_image(&mut self, image: &Image) {
         for ind in (0..image.width*image.height*4).step_by(4) {
             let pix = &image.data[ind..ind+4];
@@ -36,7 +41,7 @@ impl Histogram {
 
             let key = hist_key!(color);
 
-            self.0.entry(key)
+            self.map.entry(key)
                 .and_modify(|e| e.weight += 1)
                 .or_insert(HistogramEntry{
                     color: color,
@@ -46,7 +51,7 @@ impl Histogram {
     }
 }
 
-pub struct ColorHasher(u64);
+pub(crate )struct ColorHasher(u64);
 impl BuildHasher for ColorHasher {
     type Hasher = Self;
     #[inline(always)]

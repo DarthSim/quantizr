@@ -1,7 +1,8 @@
 use crate::error::Error;
 
+/// Quantization options
 pub struct Options {
-    pub max_colors: i32,
+    max_colors: i32,
 }
 
 impl Default for Options {
@@ -13,13 +14,21 @@ impl Default for Options {
 }
 
 impl Options {
-    pub fn set_max_colors(&mut self, colors: i32) -> Error {
+    pub fn get_max_colors(&self) -> i32 {
+        self.max_colors
+    }
+
+    /// Sets the maximum number of colors in the resultant palette.
+    ///
+    /// Returns [`Error::ValueOutOfRange`] if the provided number is greater
+    /// than 256 or less than 2
+    pub fn set_max_colors(&mut self, colors: i32) -> Result<(), Error> {
         if colors > 256 || colors < 2 {
-            return Error::ValueOutOfRange
+            return Err(Error::ValueOutOfRange)
         }
 
         self.max_colors = colors;
 
-        Error::Ok
+        Ok(())
     }
 }

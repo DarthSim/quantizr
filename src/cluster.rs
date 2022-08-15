@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use crate::histogram::{Histogram, HistogramEntry};
 
-pub struct Cluster {
+pub(crate) struct Cluster {
     pub entries: Vec<HistogramEntry>,
     pub mean: [f64; 4],
     pub weight: f64,
@@ -11,7 +11,7 @@ pub struct Cluster {
 }
 
 impl Cluster {
-    pub fn new(entries: Vec<HistogramEntry>) -> Self {
+    pub(crate) fn new(entries: Vec<HistogramEntry>) -> Self {
         let mut cluster = Self{
             entries: entries,
             mean: [0.0; 4],
@@ -25,10 +25,10 @@ impl Cluster {
         cluster
     }
 
-    pub fn from_histogram(hist: &Histogram) -> Self {
-        let mut entries = Vec::with_capacity(hist.0.len());
+    pub(crate) fn from_histogram(hist: &Histogram) -> Self {
+        let mut entries = Vec::with_capacity(hist.map.len());
 
-        for entry in hist.0.values() {
+        for entry in hist.map.values() {
             entries.push(*entry)
         }
 
@@ -79,7 +79,7 @@ impl Cluster {
         self.widest_chan = chan as u8;
     }
 
-    pub fn split_into(self, max_colors: usize) -> Vec<Self> {
+    pub(crate) fn split_into(self, max_colors: usize) -> Vec<Self> {
         let max_colors_f64 = max_colors as f64;
 
         let mut clusters = Vec::<Cluster>::with_capacity(max_colors);
@@ -128,7 +128,7 @@ impl Cluster {
         clusters
     }
 
-    pub fn split(&mut self) -> (Cluster, Cluster) {
+    fn split(&mut self) -> (Cluster, Cluster) {
         let widest_chan = self.widest_chan as usize;
         let widest_chan_mean = self.mean[widest_chan];
 

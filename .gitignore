@@ -1,7 +1,8 @@
-/target
+Cargo.lock
+target/
 tmp/
 
-config.mk
-dist/
-assets/control
-assets/quantizr.pc
+example/target/
+example/Cargo.lock
+example/*.png
+

@@ -6,14 +6,16 @@ use crate::image::Image;
 use crate::options::Options;
 use crate::colormap::Colormap;
 
+// Result of quantization
 pub struct QuantizeResult {
-    pub palette: Palette,
-    pub error: f32,
-    pub dithering_level: f32,
+    palette: Palette,
+    error: f32,
+    dithering_level: f32,
     colormap: Colormap,
 }
 
 impl QuantizeResult {
+    /// Quantizes the provided [`Image`]
     pub fn quantize(image: &Image, attr: &Options) -> Self {
         let mut hist = Histogram::new();
         hist.add_image(image);
@@ -21,12 +23,13 @@ impl QuantizeResult {
         Self::quantize_histogram(&hist, attr)
     }
 
+    /// Quantizes the provided [`Histogram`]
     pub fn quantize_histogram(hist: &Histogram, attr: &Options) -> Self {
         let colormap: Colormap;
 
-        let max_colors = attr.max_colors as usize;
+        let max_colors = attr.get_max_colors() as usize;
 
-        if hist.0.len() <= max_colors {
+        if hist.map.len() <= max_colors {
             colormap = Colormap::from_histogram(&hist);
         } else {
             let root = Cluster::from_histogram(&hist);
@@ -46,19 +49,38 @@ impl QuantizeResult {
         }
     }
 
-    pub fn set_dithering_level(&mut self, level: f32) -> Error {
+    /// Sets the dithering level.
+    ///
+    /// Returns [`Error::ValueOutOfRange`] if the provided value is greater
+    /// than 1.0 or lesser than 0.0
+    pub fn set_dithering_level(&mut self, level: f32) -> Result<(), Error> {
         if level > 1.0 || level < 0.0 {
-            return Error::ValueOutOfRange
+            return Err(Error::ValueOutOfRange)
         }
 
         self.dithering_level = level;
 
-        Error::Ok
+        Ok(())
     }
 
-    pub fn remap_image(&mut self, image: &Image, buf: &mut [u8]) -> Error {
+    /// Returns quantization error. The lesser the error the better the image
+    /// was quantized
+    pub fn get_error(&self) -> f32 {
+        self.error
+    }
+
+    /// Returns the [`Palette`] generated after quantization
+    pub fn get_palette(&self) -> &Palette {
+        &self.palette
+    }
+
+    /// Remaps the proxided [`Image`] to a slize of bytes.
+    ///
+    /// Returns [`Error::BufferTooSmall`] if the provided buffer is smaller
+    /// than `image.width * image.height`
+    pub fn remap_image(&self, image: &Image, buf: &mut [u8]) -> Result<(), Error> {
         if buf.len() < image.width * image.height {
-            return Error::BufferTooSmall
+            return Err(Error::BufferTooSmall)
         }
 
         if self.dithering_level > 0.0 {
@@ -67,12 +89,10 @@ impl QuantizeResult {
             self.remap_image_no_dither(image, buf);
         }
 
-        self.colormap.generate_palette(&mut self.palette);
-
-        Error::Ok
+        Ok(())
     }
 
-    fn remap_image_no_dither(&mut self, image: &Image, buf: &mut [u8]) {
+    fn remap_image_no_dither(&self, image: &Image, buf: &mut [u8]) {
         for point in 0..image.width*image.height {
             let data_point = point*4;
 
@@ -88,7 +108,7 @@ impl QuantizeResult {
         }
     }
 
-    fn remap_image_dither(&mut self, image: &Image, buf: &mut [u8]) {
+    fn remap_image_dither(&self, image: &Image, buf: &mut [u8]) {
         let error_size = image.width+2;
         let mut error_curr = vec![[0f32; 4]; error_size];
         let mut error_next = vec![[0f32; 4]; error_size];

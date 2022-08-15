@@ -1,4 +1,5 @@
-#[repr(C)]
+/// RGBA color
+#[cfg_attr(feature="capi", repr(C))]
 #[derive(Clone,Copy)]
 pub struct Color {
     pub r: u8,
@@ -13,9 +14,12 @@ impl Default for Color {
     }
 }
 
-#[repr(C)]
+/// Color palette
+#[cfg_attr(feature="capi", repr(C))]
 pub struct Palette {
+    /// The number of colors in the palette
     pub count: u32,
+    /// The palette colors
     pub entries: [Color; 256],
 }
 

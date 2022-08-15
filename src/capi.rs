@@ -18,7 +18,6 @@ pub enum QuantizrError {
 impl std::convert::From<Error> for QuantizrError {
     fn from(error: Error) -> Self {
         match error {
-            Error::Ok => Self::QuantizrOk,
             Error::ValueOutOfRange => Self::QuantizrValueOutOfRange,
             Error::BufferTooSmall => Self::QuantizrBufferTooSmall,
         }
@@ -32,18 +31,25 @@ pub extern fn quantizr_new_options() -> *mut Options {
 
 #[no_mangle]
 pub unsafe extern fn quantizr_set_max_colors(options: *mut Options, colors: i32) -> QuantizrError {
-    (*options).set_max_colors(colors).into()
+    match (*options).set_max_colors(colors) {
+        Ok(_) => QuantizrError::QuantizrOk,
+        Err(e) => e.into()
+    }
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_create_image_rgba(data: *const u8, width: i32, height: i32) -> *mut Image {
+pub unsafe extern fn quantizr_create_image_rgba(data: *const u8, width: i32, height: i32) -> *mut Image<'static> {
     let uwidth = width as usize;
     let uheight = height as usize;
     let size: usize = uwidth * uheight * 4;
 
     let data_slice = slice::from_raw_parts(data, size);
+    let image = match Image::new(data_slice, uwidth, uheight) {
+        Ok(img) => img,
+        Err(e) => panic!("{}", e), // Should never reach this
+    };
 
-    Box::into_raw(Box::new(Image::new(data_slice, uwidth, uheight)))
+    Box::into_raw(Box::new(image))
 }
 
 #[no_mangle]
@@ -69,24 +75,30 @@ pub unsafe extern fn quantizr_quantize_histogram(hist: *const Histogram, options
 
 #[no_mangle]
 pub unsafe extern fn quantizr_set_dithering_level(result: *mut QuantizeResult, dither: f32) -> QuantizrError {
-    (*result).set_dithering_level(dither).into()
+    match (*result).set_dithering_level(dither) {
+        Ok(_) => QuantizrError::QuantizrOk,
+        Err(e) => e.into()
+    }
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_get_palette(result: *mut QuantizeResult) -> *const Palette {
-    &(*result).palette
+pub unsafe extern fn quantizr_get_palette(result: *const QuantizeResult) -> *const Palette {
+    (*result).get_palette()
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_get_error(result: *mut QuantizeResult) -> f32 {
-    (*result).error
+pub unsafe extern fn quantizr_get_error(result: *const QuantizeResult) -> f32 {
+    (*result).get_error()
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_remap(result: *mut QuantizeResult, image: *mut Image, buffer: *mut u8, buffer_size: usize) -> QuantizrError {
+pub unsafe extern fn quantizr_remap(result: *const QuantizeResult, image: *const Image, buffer: *mut u8, buffer_size: usize) -> QuantizrError {
     let mut buf = slice::from_raw_parts_mut(buffer, buffer_size);
 
-    (*result).remap_image(&(*image), &mut buf).into()
+    match (*result).remap_image(&(*image), &mut buf) {
+        Ok(_) => QuantizrError::QuantizrOk,
+        Err(e) => e.into()
+    }
 }
 
 #[no_mangle]

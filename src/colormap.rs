@@ -18,14 +18,14 @@ impl vpsearch::MetricSpace<ColormapEntry> for [f32; 4] {
 
 type ColormapTree = vpsearch::Tree::<[f32; 4], ColormapEntry>;
 
-pub struct Colormap {
+pub(crate) struct Colormap {
     entries: Vec<[f32; 4]>,
     tree: ColormapTree,
-    pub error: f32,
+    pub(crate) error: f32,
 }
 
 impl Colormap {
-    pub fn from_clusters(clusters: &Vec::<Cluster>) -> Self {
+    pub(crate) fn from_clusters(clusters: &Vec::<Cluster>) -> Self {
         assert!(clusters.len() <= 256);
 
         let mut total_weight = 0f32;
@@ -54,10 +54,10 @@ impl Colormap {
         }
     }
 
-    pub fn from_histogram(hist: &Histogram) -> Self {
-        assert!(hist.0.len() <= 256);
+    pub(crate) fn from_histogram(hist: &Histogram) -> Self {
+        assert!(hist.map.len() <= 256);
 
-        let mut entries: Vec::<[f32; 4]> = hist.0.values().map(|e|{
+        let mut entries: Vec::<[f32; 4]> = hist.map.values().map(|e|{
             [e.color[0] as f32, e.color[1] as f32, e.color[2] as f32, e.color[3] as f32]
         }).collect();
 
@@ -72,7 +72,7 @@ impl Colormap {
         }
     }
 
-    pub fn generate_palette(&self, palette: &mut Palette) {
+    pub(crate) fn generate_palette(&self, palette: &mut Palette) {
         palette.count = self.entries.len() as u32;
 
         for (i, e) in self.entries.iter().enumerate() {
@@ -85,11 +85,11 @@ impl Colormap {
     }
 
     #[inline(always)]
-    pub fn nearest_ind(&self, color: &[f32; 4]) -> (usize, f32) {
+    pub(crate) fn nearest_ind(&self, color: &[f32; 4]) -> (usize, f32) {
         self.tree.find_nearest(color)
     }
 
-    pub fn color(&self, ind: usize) -> &[f32; 4] {
+    pub(crate) fn color(&self, ind: usize) -> &[f32; 4] {
         &self.entries[ind]
     }
 }
