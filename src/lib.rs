@@ -59,6 +59,7 @@ mod image;
 mod options;
 mod histogram;
 mod cluster;
+mod vpsearch;
 mod colormap;
 mod palette;
 mod quantize;

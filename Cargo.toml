@@ -18,7 +18,4 @@ debug-assertions = false
 [features]
 "capi" = []
 
-[dependencies]
-vpsearch = "2.0.1"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

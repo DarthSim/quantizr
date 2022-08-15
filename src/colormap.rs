@@ -1,26 +1,14 @@
 use std::cmp::Ordering;
 
-use vpsearch;
+use crate::vpsearch;
 
 use crate::palette::Palette;
 use crate::cluster::Cluster;
 use crate::histogram::Histogram;
 
-struct ColormapEntry;
-impl vpsearch::MetricSpace<ColormapEntry> for [f32; 4] {
-    type UserData = ();
-    type Distance = f32;
-
-    fn distance(&self, other: &Self, _: &Self::UserData) -> Self::Distance {
-        color_dist(self, other).sqrt()
-    }
-}
-
-type ColormapTree = vpsearch::Tree::<[f32; 4], ColormapEntry>;
-
 pub(crate) struct Colormap {
     entries: Vec<[f32; 4]>,
-    tree: ColormapTree,
+    tree: vpsearch::SearchTree,
     pub(crate) error: f32,
 }
 
@@ -28,24 +16,29 @@ impl Colormap {
     pub(crate) fn from_clusters(clusters: &Vec::<Cluster>) -> Self {
         assert!(clusters.len() <= 256);
 
+        let mut weights = [0f32; 256];
         let mut total_weight = 0f32;
 
-        let mut entries: Vec::<[f32; 4]> = clusters.iter().map(|c|{
-            total_weight += c.weight as f32;
+        let mut entries: Vec::<[f32; 4]> = clusters.iter().enumerate().map(|(i, c)|{
+            let weight = c.weight as f32;
+            weights[i] = weight;
+            total_weight += weight;
             [c.mean[0] as f32, c.mean[1] as f32, c.mean[2] as f32, c.mean[3] as f32]
         }).collect();
 
-        let mut tree = vpsearch::Tree::new(&entries);
-        let mut error = kmeans(clusters, &mut entries, &tree, total_weight);
+        let mut error;
+
+        let mut tree = vpsearch::SearchTree::new(&entries, &weights);
+        (error, weights) = kmeans(clusters, &mut entries, &tree, total_weight);
 
         if error > 0.001 {
-            tree = vpsearch::Tree::new(&entries);
-            error = kmeans(clusters, &mut entries, &tree, total_weight);
+            tree = vpsearch::SearchTree::new(&entries, &weights);
+            (error, weights) = kmeans(clusters, &mut entries, &tree, total_weight);
         }
 
         sort_colors(&mut entries);
 
-        tree = vpsearch::Tree::new(&entries);
+        tree = vpsearch::SearchTree::new(&entries, &weights);
 
         Self{
             entries: entries,
@@ -57,13 +50,16 @@ impl Colormap {
     pub(crate) fn from_histogram(hist: &Histogram) -> Self {
         assert!(hist.map.len() <= 256);
 
-        let mut entries: Vec::<[f32; 4]> = hist.map.values().map(|e|{
+        let mut weights = [0f32; 256];
+
+        let mut entries: Vec::<[f32; 4]> = hist.map.values().enumerate().map(|(i, e)|{
+            weights[i] = e.weight as f32;
             [e.color[0] as f32, e.color[1] as f32, e.color[2] as f32, e.color[3] as f32]
         }).collect();
 
         sort_colors(&mut entries);
 
-        let tree = vpsearch::Tree::new(&entries);
+        let tree = vpsearch::SearchTree::new(&entries, &weights);
 
         Self{
             entries: entries,
@@ -86,7 +82,7 @@ impl Colormap {
 
     #[inline(always)]
     pub(crate) fn nearest_ind(&self, color: &[f32; 4]) -> (usize, f32) {
-        self.tree.find_nearest(color)
+        self.tree.find_nearest(color, &self.entries)
     }
 
     pub(crate) fn color(&self, ind: usize) -> &[f32; 4] {
@@ -94,7 +90,7 @@ impl Colormap {
     }
 }
 
-fn kmeans(clusters: &Vec::<Cluster>, entries: &mut Vec<[f32; 4]>, tree: &ColormapTree, total_weight: f32) -> f32 {
+fn kmeans(clusters: &Vec::<Cluster>, entries: &mut Vec<[f32; 4]>, tree: &vpsearch::SearchTree, total_weight: f32) -> (f32, [f32; 256]) {
     let mut colors = [[0f32; 4]; 256];
     let mut weights = [0f32; 256];
 
@@ -110,7 +106,7 @@ fn kmeans(clusters: &Vec::<Cluster>, entries: &mut Vec<[f32; 4]>, tree: &Colorma
             ];
             let weight = entry.weight as f32;
 
-            let (ind, err) = tree.find_nearest(&hist_color);
+            let (ind, err) = tree.find_nearest(&hist_color, entries);
 
             let color = &mut colors[ind];
             add_color(color, &hist_color, weight);
@@ -129,7 +125,7 @@ fn kmeans(clusters: &Vec::<Cluster>, entries: &mut Vec<[f32; 4]>, tree: &Colorma
         }
     }
 
-    return total_err / total_weight;
+    return (total_err / total_weight, weights);
 }
 
 fn sort_colors(entries: &mut Vec<[f32; 4]>) {
@@ -162,32 +158,4 @@ fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
     dst[1] += src[1] * weight;
     dst[2] += src[2] * weight;
     dst[3] += src[3] * weight;
-}
-
-#[cfg(target_arch = "x86_64")]
-#[inline(always)]
-fn color_dist(c1: &[f32; 4], c2: &[f32; 4]) -> f32 {
-    unsafe {
-        use std::arch::x86_64::*;
-
-        let pc1 = _mm_loadu_ps(c1.as_ptr());
-        let pc2 = _mm_loadu_ps(c2.as_ptr());
-
-        let mut dist = _mm_sub_ps(pc1, pc2);
-        dist = _mm_mul_ps(dist, dist);
-
-        let mut tmp = [0f32; 4];
-        _mm_storeu_ps(tmp.as_mut_ptr(), dist);
-
-        tmp[0] + tmp[1] + tmp[2] + tmp[3]
-    }
-}
-
-#[cfg(not(target_arch = "x86_64"))]
-#[inline(always)]
-fn color_dist(c1: &[f32; 4], c2: &[f32; 4]) -> f32 {
-    (c1[0] - c2[0]).powi(2) +
-    (c1[1] - c2[1]).powi(2) +
-    (c1[2] - c2[2]).powi(2) +
-    (c1[3] - c2[3]).powi(2)
 }
