@@ -6,6 +6,8 @@ use crate::image::Image;
 use crate::options::Options;
 use crate::colormap::Colormap;
 
+const EMPTY_PIX: [u8; 4] = [0; 4];
+
 // Result of quantization
 pub struct QuantizeResult {
     palette: Palette,
@@ -96,7 +98,7 @@ impl QuantizeResult {
         for point in 0..image.width*image.height {
             let data_point = point*4;
 
-            let pix = &image.data[data_point..data_point+4];
+            let pix = pix_or_empty(&image.data[data_point..data_point+4]);
             let r = pix[0] as f32;
             let g = pix[1] as f32;
             let b = pix[2] as f32;
@@ -147,7 +149,7 @@ impl QuantizeResult {
                     err_pix[3] = err_pix[3] * 0.8;
                 }
 
-                let pix = &image.data[data_point..data_point+4];
+                let pix = pix_or_empty(&image.data[data_point..data_point+4]);
                 let dith_pix = [
                     pix[0] as f32 + err_pix[0],
                     pix[1] as f32 + err_pix[1],
@@ -218,4 +220,12 @@ impl QuantizeResult {
             error_next.fill_with(|| [0f32; 4]);
         }
     }
+}
+
+#[inline(always)]
+fn pix_or_empty(pix: &[u8]) -> &[u8] {
+    if pix[3] == 0 {
+        return &EMPTY_PIX
+    }
+    pix
 }
