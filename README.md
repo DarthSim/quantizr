@@ -1,6 +1,8 @@
 # Quantizr
 
-Fast library for conversion of RGBA images to 8-bit paletted images. Can be used in C programs.
+![Crates.io](https://img.shields.io/crates/v/quantizr?style=for-the-badge) ![docs.rs](https://img.shields.io/docsrs/quantizr?style=for-the-badge)
+
+Fast library for converting RGBA images to 8-bit palette images. Written in Rust; can be used in C programs.
 
 ## Using with Rust
 
