@@ -1,6 +1,5 @@
 use std::fmt;
 
-#[cfg_attr(feature="capi", repr(C))]
 #[non_exhaustive]
 pub enum Error {
     /// The value provided to the fuction is out of allowed range
