@@ -7,7 +7,8 @@ use crate::cluster::Cluster;
 use crate::histogram::Histogram;
 
 pub(crate) struct Colormap {
-    entries: Vec<[f32; 4]>,
+    size: usize,
+    entries: [[f32; 4]; 256],
     tree: vpsearch::SearchTree,
     pub(crate) error: f32,
 }
@@ -16,31 +17,36 @@ impl Colormap {
     pub(crate) fn from_clusters(clusters: &Vec::<Cluster>) -> Self {
         assert!(clusters.len() <= 256);
 
+        let size = clusters.len();
+        let mut entries = [[0f32; 4]; 256];
         let mut weights = [0f32; 256];
         let mut total_weight = 0f32;
 
-        let mut entries: Vec::<[f32; 4]> = clusters.iter().enumerate().map(|(i, c)|{
+        clusters.iter().enumerate().for_each(|(i, c)|{
+            entries[i] = [c.mean[0] as f32, c.mean[1] as f32, c.mean[2] as f32, c.mean[3] as f32];
+
             let weight = c.weight as f32;
             weights[i] = weight;
             total_weight += weight;
-            [c.mean[0] as f32, c.mean[1] as f32, c.mean[2] as f32, c.mean[3] as f32]
-        }).collect();
+        });
 
+        let entries_sl = &mut entries[..size];
         let mut error;
 
-        let mut tree = vpsearch::SearchTree::new(&entries, &weights);
-        (error, weights) = kmeans(clusters, &mut entries, &tree, total_weight);
+        let mut tree = vpsearch::SearchTree::new(entries_sl, &weights);
+        (error, weights) = kmeans(clusters, entries_sl, &tree, total_weight);
 
         if error > 0.001 {
-            tree = vpsearch::SearchTree::new(&entries, &weights);
-            (error, weights) = kmeans(clusters, &mut entries, &tree, total_weight);
+            tree = vpsearch::SearchTree::new(entries_sl, &weights);
+            (error, weights) = kmeans(clusters, entries_sl, &tree, total_weight);
         }
 
-        sort_colors(&mut entries);
+        sort_colors(entries_sl);
 
-        tree = vpsearch::SearchTree::new(&entries, &weights);
+        tree = vpsearch::SearchTree::new(entries_sl, &weights);
 
         Self{
+            size: size,
             entries: entries,
             tree: tree,
             error: error,
@@ -50,18 +56,23 @@ impl Colormap {
     pub(crate) fn from_histogram(hist: &Histogram) -> Self {
         assert!(hist.map.len() <= 256);
 
+        let size = hist.map.len();
+        let mut entries = [[0f32; 4]; 256];
         let mut weights = [0f32; 256];
 
-        let mut entries: Vec::<[f32; 4]> = hist.map.values().enumerate().map(|(i, e)|{
+        hist.map.values().enumerate().for_each(|(i, e)|{
+            entries[i] = [e.color[0] as f32, e.color[1] as f32, e.color[2] as f32, e.color[3] as f32];
             weights[i] = e.weight as f32;
-            [e.color[0] as f32, e.color[1] as f32, e.color[2] as f32, e.color[3] as f32]
-        }).collect();
+        });
 
-        sort_colors(&mut entries);
+        let entries_sl = &mut entries[..size];
 
-        let tree = vpsearch::SearchTree::new(&entries, &weights);
+        sort_colors(entries_sl);
+
+        let tree = vpsearch::SearchTree::new(&entries_sl, &weights);
 
         Self{
+            size: size,
             entries: entries,
             tree: tree,
             error: 0f32,
@@ -69,9 +80,9 @@ impl Colormap {
     }
 
     pub(crate) fn generate_palette(&self, palette: &mut Palette) {
-        palette.count = self.entries.len() as u32;
+        palette.count = self.size as u32;
 
-        for (i, e) in self.entries.iter().enumerate() {
+        for (i, e) in self.entries[..self.size].iter().enumerate() {
             let c = &mut palette.entries[i];
             c.r = e[0].round().clamp(0.0, 255.0) as u8;
             c.g = e[1].round().clamp(0.0, 255.0) as u8;
@@ -90,7 +101,7 @@ impl Colormap {
     }
 }
 
-fn kmeans(clusters: &Vec::<Cluster>, entries: &mut Vec<[f32; 4]>, tree: &vpsearch::SearchTree, total_weight: f32) -> (f32, [f32; 256]) {
+fn kmeans(clusters: &Vec::<Cluster>, entries: &mut [[f32; 4]], tree: &vpsearch::SearchTree, total_weight: f32) -> (f32, [f32; 256]) {
     let mut colors = [[0f32; 4]; 256];
     let mut weights = [0f32; 256];
 
@@ -128,7 +139,7 @@ fn kmeans(clusters: &Vec::<Cluster>, entries: &mut Vec<[f32; 4]>, tree: &vpsearc
     return (total_err / total_weight, weights);
 }
 
-fn sort_colors(entries: &mut Vec<[f32; 4]>) {
+fn sort_colors(entries: &mut [[f32; 4]]) {
     entries.sort_unstable_by(|e1, e2| {
         e1[3].partial_cmp(&e2[3]).unwrap_or(Ordering::Equal)
     });
