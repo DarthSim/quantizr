@@ -199,7 +199,26 @@ fn dist(c1: &[f32; 4], c2: &[f32; 4]) -> f32 {
     }
 }
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[inline(always)]
+fn dist(c1: &[f32; 4], c2: &[f32; 4]) -> f32 {
+    unsafe {
+        use std::arch::aarch64::*;
+
+        let pc1 = vld1q_f32(c1.as_ptr());
+        let pc2 = vld1q_f32(c2.as_ptr());
+
+        let mut dist = vsubq_f32(pc1, pc2);
+        dist = vmulq_f32(dist, dist);
+
+        let mut tmp = [0f32; 4];
+        vst1q_f32(tmp.as_mut_ptr(), dist);
+
+        tmp[0] + tmp[1] + tmp[2] + tmp[3]
+    }
+}
+
+#[cfg(not(any(target_arch = "x86_64", all(target_arch = "aarch64", target_feature = "neon"))))]
 #[inline(always)]
 fn dist(c1: &[f32; 4], c2: &[f32; 4]) -> f32 {
     (c1[0] - c2[0]).powi(2) +

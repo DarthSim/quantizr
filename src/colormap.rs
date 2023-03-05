@@ -162,7 +162,24 @@ fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
     }
 }
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[inline(always)]
+fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
+    unsafe {
+        use std::arch::aarch64::*;
+
+        let mut psrc = vld1q_f32(src.as_ptr());
+        let mut pdst = vld1q_f32(dst.as_ptr());
+        let pweights = vmovq_n_f32(weight);
+
+        psrc = vmulq_f32(psrc, pweights);
+        pdst = vaddq_f32(pdst, psrc);
+
+        vst1q_f32(dst.as_mut_ptr(), pdst);
+    }
+}
+
+#[cfg(not(any(target_arch = "x86_64", all(target_arch = "aarch64", target_feature = "neon"))))]
 #[inline(always)]
 fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
     dst[0] += src[0] * weight;
