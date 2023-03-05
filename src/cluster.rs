@@ -4,9 +4,9 @@ use crate::histogram::{Histogram, HistogramEntry};
 
 pub(crate) struct Cluster {
     pub entries: Vec<HistogramEntry>,
-    pub mean: [f64; 4],
-    pub weight: f64,
-    pub chan_diff: f64,
+    pub mean: [f32; 4],
+    pub weight: f32,
+    pub chan_diff: f32,
     widest_chan: u8,
 }
 
@@ -44,13 +44,13 @@ impl Cluster {
             return
         }
 
-        for e in self.entries.iter() {
-            let weight = e.weight as f64;
+        let mut tmp;
 
-            self.mean[0] += e.color[0] as f64 * weight;
-            self.mean[1] += e.color[1] as f64 * weight;
-            self.mean[2] += e.color[2] as f64 * weight;
-            self.mean[3] += e.color[3] as f64 * weight;
+        for e in self.entries.iter() {
+            let weight = e.weight as f32;
+
+            tmp = [e.color[0] as f32, e.color[1] as f32, e.color[2] as f32, e.color[3] as f32];
+            add_color(&mut self.mean, &tmp, weight);
 
             self.weight += weight;
         }
@@ -60,15 +60,13 @@ impl Cluster {
         self.mean[2] /= self.weight;
         self.mean[3] /= self.weight;
 
-        let mut diff_sum: [f64; 4] = [0f64; 4];
+        let mut diff_sum: [f32; 4] = [0f32; 4];
 
         for e in self.entries.iter() {
-            let weight = e.weight as f64;
+            let weight = e.weight as f32;
 
-            diff_sum[0] += (e.color[0] as f64 - self.mean[0]).abs() * weight;
-            diff_sum[1] += (e.color[1] as f64 - self.mean[1]).abs() * weight;
-            diff_sum[2] += (e.color[2] as f64 - self.mean[2]).abs() * weight;
-            diff_sum[3] += (e.color[3] as f64 - self.mean[3]).abs() * weight;
+            tmp = [e.color[0] as f32, e.color[1] as f32, e.color[2] as f32, e.color[3] as f32];
+            add_diff(&mut diff_sum, &tmp, &self.mean, weight);
         }
 
         let (chan, max_diff_sum) = diff_sum.iter().enumerate()
@@ -80,7 +78,7 @@ impl Cluster {
     }
 
     pub(crate) fn split_into(self, max_colors: usize) -> Vec<Self> {
-        let max_colors_f64 = max_colors as f64;
+        let max_colors_f32 = max_colors as f32;
 
         let mut clusters = Vec::<Cluster>::with_capacity(max_colors);
 
@@ -89,7 +87,7 @@ impl Cluster {
         while clusters.len() < max_colors {
             // We want to split bigger clusters in the beginning,
             // and clusters with bigger chan_diff in the end
-            let weight_ratio = 0.75 - (clusters.len() as f64 + 1.0) / max_colors_f64 / 2.0;
+            let weight_ratio = 0.75 - (clusters.len() as f32 + 1.0) / max_colors_f32 / 2.0;
 
             // Get the best cluster to split
             let to_split_opt = clusters.iter().enumerate()
@@ -141,7 +139,7 @@ impl Cluster {
 
         while i <= gt {
             let entry = &self.entries[i];
-            let val = entry.color[widest_chan] as f64;
+            let val = entry.color[widest_chan] as f32;
 
             if val < widest_chan_mean {
                 lt_weight += entry.weight as usize;
@@ -168,4 +166,101 @@ impl Cluster {
 
         (Self::new(sp1.to_vec()), Self::new(sp2.to_vec()))
     }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
+    unsafe {
+        use std::arch::x86_64::*;
+
+        let mut psrc = _mm_loadu_ps(src.as_ptr());
+        let mut pdst = _mm_loadu_ps(dst.as_ptr());
+        let pweights = _mm_set1_ps(weight);
+
+        psrc = _mm_mul_ps(psrc, pweights);
+        pdst = _mm_add_ps(pdst, psrc);
+
+        _mm_storeu_ps(dst.as_mut_ptr(), pdst);
+    }
+}
+
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[inline(always)]
+fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
+    unsafe {
+        use std::arch::aarch64::*;
+
+        let mut psrc = vld1q_f32(src.as_ptr());
+        let mut pdst = vld1q_f32(dst.as_ptr());
+        let pweights = vmovq_n_f32(weight);
+
+        psrc = vmulq_f32(psrc, pweights);
+        pdst = vaddq_f32(pdst, psrc);
+
+        vst1q_f32(dst.as_mut_ptr(), pdst);
+    }
+}
+
+#[cfg(not(any(target_arch = "x86_64", all(target_arch = "aarch64", target_feature = "neon"))))]
+#[inline(always)]
+fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
+    dst[0] += src[0] * weight;
+    dst[1] += src[1] * weight;
+    dst[2] += src[2] * weight;
+    dst[3] += src[3] * weight;
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+fn add_diff(dst: &mut [f32; 4], a: &[f32; 4], b: &[f32; 4], weight: f32) {
+    unsafe {
+        use std::arch::x86_64::*;
+
+        let pa = _mm_loadu_ps(a.as_ptr());
+        let pb = _mm_loadu_ps(b.as_ptr());
+        let mut pdst = _mm_loadu_ps(dst.as_ptr());
+        let pweights = _mm_set1_ps(weight);
+
+        let mut diff = _mm_sub_ps(pa, pb);
+
+        // Abs
+        let mask = _mm_castsi128_ps(_mm_srli_epi32(_mm_set1_epi32(-1), 1));
+        diff = _mm_and_ps(mask, diff);
+
+        diff = _mm_mul_ps(diff, pweights);
+        pdst = _mm_add_ps(pdst, diff);
+
+        _mm_storeu_ps(dst.as_mut_ptr(), pdst);
+    }
+}
+
+#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+#[inline(always)]
+fn add_diff(dst: &mut [f32; 4], a: &[f32; 4], b: &[f32; 4], weight: f32) {
+    unsafe {
+        use std::arch::aarch64::*;
+
+        let pa = vld1q_f32(a.as_ptr());
+        let pb = vld1q_f32(b.as_ptr());
+        let mut pdst = vld1q_f32(dst.as_ptr());
+        let pweights = vmovq_n_f32(weight);
+
+        let mut diff = vsubq_f32(pa, pb);
+        diff = vabsq_f32(diff);
+
+        diff = vmulq_f32(diff, pweights);
+        pdst = vaddq_f32(pdst, diff);
+
+        vst1q_f32(dst.as_mut_ptr(), pdst);
+    }
+}
+
+#[cfg(not(any(target_arch = "x86_64", all(target_arch = "aarch64", target_feature = "neon"))))]
+#[inline(always)]
+fn add_diff(dst: &mut [f32; 4], a: &[f32; 4], b: &[f32; 4], weight: f32) {
+    dst[0] += (a[0] - b[0]).abs() * weight;
+    dst[1] += (a[1] - b[1]).abs() * weight;
+    dst[2] += (a[2] - b[2]).abs() * weight;
+    dst[3] += (a[3] - b[3]).abs() * weight;
 }
