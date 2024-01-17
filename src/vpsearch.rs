@@ -211,10 +211,7 @@ fn dist(c1: &[f32; 4], c2: &[f32; 4]) -> f32 {
         let mut dist = vsubq_f32(pc1, pc2);
         dist = vmulq_f32(dist, dist);
 
-        let mut tmp = [0f32; 4];
-        vst1q_f32(tmp.as_mut_ptr(), dist);
-
-        tmp[0] + tmp[1] + tmp[2] + tmp[3]
+        vaddvq_f32(dist)
     }
 }
 
