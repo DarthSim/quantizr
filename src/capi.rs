@@ -25,12 +25,12 @@ impl std::convert::From<Error> for QuantizrError {
 }
 
 #[no_mangle]
-pub extern fn quantizr_new_options() -> *mut Options {
+pub extern "C" fn quantizr_new_options() -> *mut Options {
     Box::into_raw(Box::new(Options::default()))
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_set_max_colors(options: *mut Options, colors: i32) -> QuantizrError {
+pub unsafe extern "C" fn quantizr_set_max_colors(options: *mut Options, colors: i32) -> QuantizrError {
     match (*options).set_max_colors(colors) {
         Ok(_) => QuantizrError::QuantizrOk,
         Err(e) => e.into()
@@ -38,7 +38,7 @@ pub unsafe extern fn quantizr_set_max_colors(options: *mut Options, colors: i32)
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_create_image_rgba(data: *const u8, width: i32, height: i32) -> *mut Image<'static> {
+pub unsafe extern "C" fn quantizr_create_image_rgba(data: *const u8, width: i32, height: i32) -> *mut Image<'static> {
     let uwidth = width as usize;
     let uheight = height as usize;
     let size: usize = uwidth * uheight * 4;
@@ -53,28 +53,28 @@ pub unsafe extern fn quantizr_create_image_rgba(data: *const u8, width: i32, hei
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_create_histogram() -> *mut Histogram {
+pub unsafe extern "C" fn quantizr_create_histogram() -> *mut Histogram {
     Box::into_raw(Box::new(Histogram::new()))
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_histogram_add_image(hist: *mut Histogram, image: *const Image) -> QuantizrError {
+pub unsafe extern "C" fn quantizr_histogram_add_image(hist: *mut Histogram, image: *const Image) -> QuantizrError {
     (*hist).add_image(&(*image));
     QuantizrError::QuantizrOk
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_quantize(image: *const Image, options: *const Options) -> *mut QuantizeResult {
+pub unsafe extern "C" fn quantizr_quantize(image: *const Image, options: *const Options) -> *mut QuantizeResult {
     Box::into_raw(Box::new(QuantizeResult::quantize(&(*image), &(*options))))
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_quantize_histogram(hist: *const Histogram, options: *const Options) -> *mut QuantizeResult {
+pub unsafe extern "C" fn quantizr_quantize_histogram(hist: *const Histogram, options: *const Options) -> *mut QuantizeResult {
     Box::into_raw(Box::new(QuantizeResult::quantize_histogram(&(*hist), &(*options))))
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_set_dithering_level(result: *mut QuantizeResult, dither: f32) -> QuantizrError {
+pub unsafe extern "C" fn quantizr_set_dithering_level(result: *mut QuantizeResult, dither: f32) -> QuantizrError {
     match (*result).set_dithering_level(dither) {
         Ok(_) => QuantizrError::QuantizrOk,
         Err(e) => e.into()
@@ -82,17 +82,17 @@ pub unsafe extern fn quantizr_set_dithering_level(result: *mut QuantizeResult, d
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_get_palette(result: *const QuantizeResult) -> *const Palette {
+pub unsafe extern "C" fn quantizr_get_palette(result: *const QuantizeResult) -> *const Palette {
     (*result).get_palette()
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_get_error(result: *const QuantizeResult) -> f32 {
+pub unsafe extern "C" fn quantizr_get_error(result: *const QuantizeResult) -> f32 {
     (*result).get_error()
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_remap(result: *const QuantizeResult, image: *const Image, buffer: *mut u8, buffer_size: usize) -> QuantizrError {
+pub unsafe extern "C" fn quantizr_remap(result: *const QuantizeResult, image: *const Image, buffer: *mut u8, buffer_size: usize) -> QuantizrError {
     let mut buf = slice::from_raw_parts_mut(buffer, buffer_size);
 
     match (*result).remap_image(&(*image), &mut buf) {
@@ -102,21 +102,21 @@ pub unsafe extern fn quantizr_remap(result: *const QuantizeResult, image: *const
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_free_result(result: *mut QuantizeResult) {
+pub unsafe extern "C" fn quantizr_free_result(result: *mut QuantizeResult) {
     std::mem::drop(Box::from_raw(result))
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_free_histogram(hist: *mut Histogram) {
+pub unsafe extern "C" fn quantizr_free_histogram(hist: *mut Histogram) {
     std::mem::drop(Box::from_raw(hist))
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_free_image(image: *mut Image) {
+pub unsafe extern "C" fn quantizr_free_image(image: *mut Image) {
     std::mem::drop(Box::from_raw(image))
 }
 
 #[no_mangle]
-pub unsafe extern fn quantizr_free_options(options: *mut Options) {
+pub unsafe extern "C" fn quantizr_free_options(options: *mut Options) {
     std::mem::drop(Box::from_raw(options))
 }
