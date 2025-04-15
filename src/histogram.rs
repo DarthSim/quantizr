@@ -1,16 +1,7 @@
 use std::collections::HashMap;
-use std::hash::{BuildHasher,Hasher};
+use std::hash::{BuildHasher, Hasher};
 
 use crate::image::Image;
-
-macro_rules! hist_key {
-    ($c: expr) => {
-        (($c[0] as u64) << 24) +
-        (($c[1] as u64) << 16) +
-        (($c[2] as u64) << 8) +
-        ($c[3] as u64)
-    };
-}
 
 pub(crate) struct HistogramEntry {
     pub color: [u8; 4],
@@ -30,18 +21,27 @@ impl Histogram {
 
     /// Adds colors from [`Image`] to the histogram
     pub fn add_image(&mut self, image: &Image) {
-        for ind in (0..image.width*image.height*4).step_by(4) {
-            let pix = &image.data[ind..ind+4];
-            let color = if pix[3] != 0 {
-                [pix[0], pix[1], pix[2], pix[3]]
-            } else {
-                [0, 0, 0, 0]
-            };
+        let size = image.width * image.height;
 
-            let key = hist_key!(color);
+        let to_reserve = if self.map.len() == 0 {
+            size / 7
+        } else {
+            size / 21
+        }.min(512*512);
+        self.map.reserve(to_reserve);
+
+        for ind in (0..size*4).step_by(4) {
+            let pix = &image.data[ind..ind+4];
+
+            let mut color: [u8; 4] = [0; 4];
+            if pix[3] != 0 {
+                color.copy_from_slice(pix);
+            }
+
+            let key = u32::from_le_bytes(color) as u64;
 
             self.map.entry(key)
-                .and_modify(|e| e.weight += 1)
+                .and_modify(|e| e.weight = e.weight.saturating_add(1))
                 .or_insert(HistogramEntry{
                     color: color,
                     weight: 1,
@@ -60,23 +60,12 @@ impl BuildHasher for ColorHasher {
 }
 
 impl Hasher for ColorHasher {
-    // Magick number from https://github.com/cbreeden/fxhash/blob/master/lib.rs
+    // Magick numbers from https://github.com/rust-lang/rustc-hash/blob/master/src/lib.rs
     #[inline(always)]
-    fn finish(&self) -> u64 { self.0.wrapping_mul(0x517cc1b727220a95) }
+    fn finish(&self) -> u64 { self.0.wrapping_mul(0xf1357aea2e62a9c5).rotate_left(26) }
 
     #[inline(always)]
     fn write_u64(&mut self, i: u64) { self.0 = i; }
 
     fn write(&mut self, _bytes: &[u8]) { unimplemented!() }
-    fn write_u8(&mut self, _i: u8) { unimplemented!() }
-    fn write_u16(&mut self, _i: u16) { unimplemented!() }
-    fn write_u32(&mut self, _i: u32) { unimplemented!() }
-    fn write_u128(&mut self, _i: u128) { unimplemented!() }
-    fn write_usize(&mut self, _i: usize) { unimplemented!() }
-    fn write_i8(&mut self, _i: i8) { unimplemented!() }
-    fn write_i16(&mut self, _i: i16) { unimplemented!() }
-    fn write_i32(&mut self, _i: i32) { unimplemented!() }
-    fn write_i64(&mut self, _i: i64) { unimplemented!() }
-    fn write_i128(&mut self, _i: i128) { unimplemented!() }
-    fn write_isize(&mut self, _i: isize) { unimplemented!() }
 }
