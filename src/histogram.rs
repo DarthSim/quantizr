@@ -12,7 +12,6 @@ macro_rules! hist_key {
     };
 }
 
-#[derive(Clone,Copy)]
 pub(crate) struct HistogramEntry {
     pub color: [u8; 4],
     pub weight: u32,
