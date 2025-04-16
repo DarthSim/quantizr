@@ -31,3 +31,19 @@ impl Default for Palette {
         }
     }
 }
+
+impl From<&[[f32; 4]]> for Palette {
+    fn from(colors: &[[f32; 4]]) -> Self {
+        let mut palette = Self::default();
+        palette.count = colors.len() as u32;
+
+        for (i, c) in colors.iter().enumerate() {
+            palette.entries[i].r = c[0].round().clamp(0.0, 255.0) as u8;
+            palette.entries[i].g = c[1].round().clamp(0.0, 255.0) as u8;
+            palette.entries[i].b = c[2].round().clamp(0.0, 255.0) as u8;
+            palette.entries[i].a = c[3].round().clamp(0.0, 255.0) as u8;
+        }
+
+        palette
+    }
+}

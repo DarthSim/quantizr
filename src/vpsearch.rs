@@ -1,30 +1,29 @@
-use std::cmp::Ordering;
+use crate::ord_float::OrdFloat32;
 
-#[derive(Clone,Copy)]
+#[derive(Clone)]
 struct SearchIdx {
-    ind: usize,
-    distance_sq: f32,
-    weight: f32,
+    ind: u8,
+    data: [f32; 4],
 }
 
-struct SearchVisitor {
-    ind: usize,
+struct SearchVisitor<'a> {
+    ind: Option<&'a SearchIdx>,
     distance: f32,
     distance_sq: f32,
 }
 
-impl SearchVisitor {
+impl<'a> SearchVisitor<'a> {
     fn new() -> Self {
         Self {
-            ind: 0,
+            ind: None,
             distance: f32::MAX,
             distance_sq: f32::MAX,
         }
     }
 
-    fn visit(&mut self, ind: usize, distance_sq: f32) {
+    fn visit(&mut self, ind: &'a SearchIdx, distance_sq: f32) {
         if self.distance_sq > distance_sq {
-            self.ind = ind;
+            self.ind = Some(ind);
             self.distance = distance_sq.sqrt();
             self.distance_sq = distance_sq;
         }
@@ -32,23 +31,23 @@ impl SearchVisitor {
 }
 
 struct SearchNode {
-    ind: usize,
+    ind: SearchIdx,
     near: Option<Box<Self>>,
     far: Option<Box<Self>>,
-    rest: Box<[SearchIdx]>,
+    rest: Vec<SearchIdx>,
     radius: f32,
     radius_sq: f32,
 }
 
 impl SearchNode {
-    fn new(indexes: &mut [SearchIdx], data: &[[f32; 4]]) -> Option<Box<Self>> {
+    fn new(indexes: &mut Vec<SearchIdx>, weights: &[f32]) -> Option<Box<Self>> {
         if indexes.is_empty() {
             return None;
         }
 
         if indexes.len() == 1 {
             let node = Self{
-                ind: indexes[0].ind,
+                ind: indexes.pop().unwrap(),
                 near: None,
                 far: None,
                 rest: [].into(),
@@ -59,39 +58,33 @@ impl SearchNode {
             return Some(Box::new(node))
         }
 
-        let vp_pos = indexes.iter().enumerate()
-            .max_by(|&(_, a), &(_, b)| {
-                a.weight.partial_cmp(&b.weight).unwrap_or(Ordering::Equal)
-            })
-            .map(|(i, _)| i )
+        // Find the vantage point by the maximum weight
+        // and remove it from the list
+        let vp_ind = indexes.iter().enumerate()
+            .map(|(i, ind)| (i, OrdFloat32::from(weights[usize::from(ind.ind)])))
+            .max_by_key(|&(_, w)| w)
+            .map(|(i, _)| indexes.swap_remove(i))
             .unwrap();
 
-        indexes.swap(0, vp_pos);
-
-        let vp_ind = indexes[0].ind;
-        let vp_data = &data[vp_ind];
-
-        let indexes = &mut indexes[1..];
-
-        for i in indexes.iter_mut() {
-            i.distance_sq = dist(vp_data, &data[i.ind]);
-        }
-
-        indexes.sort_unstable_by(|a, b| {
-            a.distance_sq.partial_cmp(&b.distance_sq).unwrap_or(Ordering::Equal)
+        indexes.sort_by_cached_key(|i| {
+            OrdFloat32::from(dist(&vp_ind.data, &i.data))
         });
 
-        let (near, far, rest, radius_sq) = if indexes.len() < 7 {
-            let rest = &indexes[0..];
-            (None, None, rest.into(), f32::MAX)
+        let (
+            near,
+            far,
+            rest,
+            radius_sq
+        ) = if indexes.len() < 7 {
+            (None, None, indexes.to_vec(), f32::MAX)
         } else {
             let half_idx = indexes.len()/2;
             let (near_indexes, far_indexes) = indexes.split_at_mut(half_idx);
-            let radius_sq = far_indexes[0].distance_sq;
+            let radius_sq = dist(&vp_ind.data, &far_indexes[0].data);
 
             (
-                Self::new(near_indexes, data),
-                Self::new(far_indexes, data),
+                Self::new(near_indexes.to_vec().as_mut(), weights),
+                Self::new(far_indexes.to_vec().as_mut(), weights),
                 [].into(),
                 radius_sq
             )
@@ -110,18 +103,15 @@ impl SearchNode {
         Some(Box::new(node))
     }
 
-    fn visit(&self, pin: &[f32; 4], data: &[[f32; 4]], nearest: &mut SearchVisitor) {
-        let vp_data = &data[self.ind];
-        let distance_sq = dist(vp_data, pin);
+    fn visit<'a>(&'a self, pin: &[f32; 4], nearest: &mut SearchVisitor<'a>) {
+        let distance_sq = dist(&self.ind.data, pin);
 
-        nearest.visit(self.ind, distance_sq);
+        nearest.visit(&self.ind, distance_sq);
 
         if !self.rest.is_empty() {
             for r in self.rest.iter() {
-                let r_data = &data[r.ind];
-                let distance_sq = dist(r_data, pin);
-
-                nearest.visit(r.ind, distance_sq);
+                let distance_sq = dist(&r.data, pin);
+                nearest.visit(r, distance_sq);
             }
 
             return;
@@ -129,20 +119,20 @@ impl SearchNode {
 
         if distance_sq < self.radius_sq {
             if let Some(near) = &self.near {
-                near.visit(pin, data, nearest);
+                near.visit(pin, nearest);
             }
             if distance_sq.sqrt() >= self.radius - nearest.distance {
                 if let Some(far) = &self.far {
-                    far.visit(pin, data, nearest);
+                    far.visit(pin, nearest);
                 }
             }
         } else {
             if let Some(far) = &self.far {
-                far.visit(pin, data, nearest);
+                far.visit(pin, nearest);
             }
             if distance_sq.sqrt() <= self.radius + nearest.distance {
                 if let Some(near) = &self.near {
-                    near.visit(pin, data, nearest);
+                    near.visit(pin, nearest);
                 }
             }
         }
@@ -151,31 +141,35 @@ impl SearchNode {
 
 pub(crate) struct SearchTree {
     root: Option<Box<SearchNode>>,
-    min_data_len: usize,
 }
 
 impl SearchTree {
     pub(crate) fn new(data: &[[f32; 4]], weights: &[f32]) -> Self {
         assert!(weights.len() >= data.len());
+        assert!(data.len() <= 256);
 
-        let mut indexes = (0..data.len()).map(|i| {
-            SearchIdx{ind: i, distance_sq: 0f32, weight: weights[i]}
+        let mut indexes = data.iter().enumerate().map(|(i, d)| {
+            SearchIdx{ind: i as u8, data: *d}
         }).collect::<Vec<SearchIdx>>();
 
-        let root = SearchNode::new(indexes.as_mut_slice(), data);
+        let root = SearchNode::new(&mut indexes, weights);
 
-        Self{ root: root, min_data_len: data.len()}
+        Self{ root: root}
     }
 
-    pub(crate) fn find_nearest(&self, pin: &[f32; 4], data: &[[f32; 4]]) -> (usize, f32) {
-        assert!(data.len() >= self.min_data_len);
-
+    pub(crate) fn find_nearest(&self, pin: &[f32; 4]) -> (u8, [f32; 4], f32) {
         if let Some(vantage_point) = &self.root {
             let mut nearest = SearchVisitor::new();
-            vantage_point.visit(pin, data, &mut nearest);
-            (nearest.ind, nearest.distance)
+
+            vantage_point.visit(pin, &mut nearest);
+
+            if let Some(nearest_ind) = nearest.ind {
+                (nearest_ind.ind, nearest_ind.data, nearest.distance)
+            } else {
+                (0, [0f32; 4], f32::MAX)
+            }
         } else {
-            (0, f32::MAX)
+            (0, [0f32; 4], f32::MAX)
         }
     }
 }

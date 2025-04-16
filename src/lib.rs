@@ -54,6 +54,7 @@
 //! save_image2(palette, indexes2, width2, height2);
 //! ```
 
+mod ord_float;
 mod error;
 mod image;
 mod options;

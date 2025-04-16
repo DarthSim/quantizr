@@ -10,7 +10,6 @@ const EMPTY_PIX: [u8; 4] = [0; 4];
 
 // Result of quantization
 pub struct QuantizeResult {
-    palette: Palette,
     error: f32,
     dithering_level: f32,
     colormap: Colormap,
@@ -40,11 +39,7 @@ impl QuantizeResult {
             colormap = Colormap::from_clusters(&clusters);
         }
 
-        let mut palette = Palette::default();
-        colormap.generate_palette(&mut palette);
-
         Self{
-            palette: palette,
             error: colormap.error,
             colormap: colormap,
             dithering_level: 1.0,
@@ -73,7 +68,7 @@ impl QuantizeResult {
 
     /// Returns the [`Palette`] generated after quantization
     pub fn get_palette(&self) -> &Palette {
-        &self.palette
+        &self.colormap.get_palette()
     }
 
     /// Remaps the proxided [`Image`] to a slize of bytes.
@@ -104,9 +99,9 @@ impl QuantizeResult {
             let b = pix[2] as f32;
             let a = pix[3] as f32;
 
-            let (ind, _) = self.colormap.nearest_ind(&[r, g, b, a]);
+            let (ind, _, _) = self.colormap.nearest_ind(&[r, g, b, a]);
 
-            buf[point] = ind as u8;
+            buf[point] = ind;
         }
     }
 
@@ -141,7 +136,12 @@ impl QuantizeResult {
 
                 let err_pix = &mut error_curr[err_ind];
 
-                let err_total = err_pix[0].powi(2) + err_pix[1].powi(2) + err_pix[2].powi(2) + err_pix[3].powi(2);
+                let err_total =
+                    err_pix[0] * err_pix[0] +
+                    err_pix[1] * err_pix[1] +
+                    err_pix[2] * err_pix[2] +
+                    err_pix[3] * err_pix[3];
+
                 if err_total > err_threshold {
                     err_pix[0] = err_pix[0] * 0.8;
                     err_pix[1] = err_pix[1] * 0.8;
@@ -157,16 +157,16 @@ impl QuantizeResult {
                     pix[3] as f32 + err_pix[3],
                 ];
 
-                let (ind, _) = self.colormap.nearest_ind(&dith_pix);
-                buf[point] = ind as u8;
+                let (ind, pal_pix, _) = self.colormap.nearest_ind(&dith_pix);
 
-                let pal_pix = self.colormap.color(ind);
+                buf[point] = ind;
+
                 let mut err_r = dith_pix[0] - pal_pix[0];
                 let mut err_g = dith_pix[1] - pal_pix[1];
                 let mut err_b = dith_pix[2] - pal_pix[2];
                 let mut err_a = dith_pix[3] - pal_pix[3];
 
-                let err_total = err_r.powi(2) + err_g.powi(2) + err_b.powi(2) + err_a.powi(2);
+                let err_total = err_r * err_r + err_g * err_g + err_b * err_b + err_a * err_a;
                 if err_total > err_threshold {
                     err_r = err_r * 0.75;
                     err_g = err_g * 0.75;

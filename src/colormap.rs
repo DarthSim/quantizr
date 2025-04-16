@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use crate::ord_float::OrdFloat32;
 
 use crate::vpsearch;
 
@@ -7,8 +7,7 @@ use crate::cluster::Cluster;
 use crate::histogram::Histogram;
 
 pub(crate) struct Colormap {
-    size: usize,
-    entries: [[f32; 4]; 256],
+    palette: Palette,
     tree: vpsearch::SearchTree,
     pub(crate) error: f32,
 }
@@ -23,9 +22,9 @@ impl Colormap {
         let mut total_weight = 0f32;
 
         clusters.iter().enumerate().for_each(|(i, c)|{
-            entries[i] = [c.mean[0] as f32, c.mean[1] as f32, c.mean[2] as f32, c.mean[3] as f32];
+            entries[i] = [c.mean[0], c.mean[1], c.mean[2], c.mean[3]];
 
-            let weight = c.weight as f32;
+            let weight = c.weight;
             weights[i] = weight;
             total_weight += weight;
         });
@@ -41,13 +40,13 @@ impl Colormap {
             (error, weights) = kmeans(clusters, entries_sl, &tree, total_weight);
         }
 
-        sort_colors(entries_sl);
+        round_and_clamp_colors(entries_sl);
+        sort_colors(entries_sl, &mut weights);
 
         tree = vpsearch::SearchTree::new(entries_sl, &weights);
 
         Self{
-            size: size,
-            entries: entries,
+            palette: entries[..size].into(),
             tree: tree,
             error: error,
         }
@@ -67,37 +66,24 @@ impl Colormap {
 
         let entries_sl = &mut entries[..size];
 
-        sort_colors(entries_sl);
+        sort_colors(entries_sl, &mut weights);
 
         let tree = vpsearch::SearchTree::new(&entries_sl, &weights);
 
         Self{
-            size: size,
-            entries: entries,
+            palette: entries[..size].into(),
             tree: tree,
             error: 0f32,
         }
     }
 
-    pub(crate) fn generate_palette(&self, palette: &mut Palette) {
-        palette.count = self.size as u32;
-
-        for (i, e) in self.entries[..self.size].iter().enumerate() {
-            let c = &mut palette.entries[i];
-            c.r = e[0].round().clamp(0.0, 255.0) as u8;
-            c.g = e[1].round().clamp(0.0, 255.0) as u8;
-            c.b = e[2].round().clamp(0.0, 255.0) as u8;
-            c.a = e[3].round().clamp(0.0, 255.0) as u8;
-        }
+    pub(crate) fn get_palette(&self) -> &Palette {
+        &self.palette
     }
 
     #[inline(always)]
-    pub(crate) fn nearest_ind(&self, color: &[f32; 4]) -> (usize, f32) {
-        self.tree.find_nearest(color, &self.entries)
-    }
-
-    pub(crate) fn color(&self, ind: usize) -> &[f32; 4] {
-        &self.entries[ind]
+    pub(crate) fn nearest_ind(&self, color: &[f32; 4]) -> (u8, [f32; 4], f32) {
+        self.tree.find_nearest(color)
     }
 }
 
@@ -117,32 +103,67 @@ fn kmeans(clusters: &Vec::<Cluster>, entries: &mut [[f32; 4]], tree: &vpsearch::
             ];
             let weight = entry.weight as f32;
 
-            let (ind, err) = tree.find_nearest(&hist_color, entries);
+            let (ind, _, err) = tree.find_nearest(&hist_color);
 
-            let color = &mut colors[ind];
+            let color = &mut colors[usize::from(ind)];
             add_color(color, &hist_color, weight);
 
-            weights[ind] += weight;
+            weights[ind as usize] += weight;
             total_err += err*err;
         }
     }
 
-    for ((pal_c, c), weight) in entries.iter_mut().zip(colors).zip(weights) {
+    for ((ec, c), weight) in entries.iter_mut().zip(colors).zip(weights) {
         if weight > 0.0 {
-            pal_c[0] = c[0] / weight;
-            pal_c[1] = c[1] / weight;
-            pal_c[2] = c[2] / weight;
-            pal_c[3] = c[3] / weight;
+            ec[0] = c[0] / weight;
+            ec[1] = c[1] / weight;
+            ec[2] = c[2] / weight;
+            ec[3] = c[3] / weight;
         }
     }
 
     return (total_err / total_weight, weights);
 }
 
-fn sort_colors(entries: &mut [[f32; 4]]) {
-    entries.sort_unstable_by(|e1, e2| {
-        e1[3].partial_cmp(&e2[3]).unwrap_or(Ordering::Equal)
-    });
+fn round_and_clamp_colors(entries: &mut [[f32; 4]]) {
+    for entry in entries.iter_mut() {
+        entry[0] = entry[0].round().clamp(0.0, 255.0);
+        entry[1] = entry[1].round().clamp(0.0, 255.0);
+        entry[2] = entry[2].round().clamp(0.0, 255.0);
+        entry[3] = entry[3].round().clamp(0.0, 255.0);
+    }
+}
+
+/// Sort colors by alpha channel for better PNG compression.
+/// Weights are sorted along with the colors.
+fn sort_colors(entries: &mut [[f32; 4]], weights: &mut [f32]) {
+    assert!(weights.len() >= entries.len());
+
+    let mut indexes: Vec<usize> = (0..entries.len()).collect();
+    indexes.sort_by_cached_key(|&i| OrdFloat32::from(entries[i][3]));
+
+    for i in 0..indexes.len() {
+        if indexes[i] != i {
+            let mut current = i;
+
+            loop {
+                let target = indexes[current];
+
+                indexes[current] = current;
+
+                if indexes[target] == target {
+                    break
+                }
+
+                entries.swap(current, target);
+                weights.swap(current, target);
+
+                current = target;
+            }
+        }
+    }
+
+    // entries.sort_unstable_by_key(|e| OrdFloat32::from(e[3]));
 }
 
 #[cfg(target_arch = "x86_64")]
