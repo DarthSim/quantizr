@@ -9,14 +9,16 @@ pub(crate) struct HistogramEntry {
 }
 
 /// Color histogram
-pub struct Histogram{
+pub struct Histogram {
     pub(crate) map: HashMap<u64, HistogramEntry, ColorHasher>,
 }
 
 impl Histogram {
     /// Creates new empty [`Histogram`]
     pub fn new() -> Self {
-        Self{map: HashMap::with_hasher(ColorHasher(0))}
+        Self {
+            map: HashMap::with_hasher(ColorHasher(0)),
+        }
     }
 
     /// Adds colors from [`Image`] to the histogram
@@ -27,11 +29,12 @@ impl Histogram {
             size / 7
         } else {
             size / 21
-        }.min(512*512);
+        }
+        .min(512 * 512);
         self.map.reserve(to_reserve);
 
-        for ind in (0..size*4).step_by(4) {
-            let pix = &image.data[ind..ind+4];
+        for ind in (0..size * 4).step_by(4) {
+            let pix = &image.data[ind..ind + 4];
 
             let mut color: [u8; 4] = [0; 4];
             if pix[3] != 0 {
@@ -40,9 +43,10 @@ impl Histogram {
 
             let key = u32::from_le_bytes(color) as u64;
 
-            self.map.entry(key)
+            self.map
+                .entry(key)
                 .and_modify(|e| e.weight = e.weight.saturating_add(1))
-                .or_insert(HistogramEntry{
+                .or_insert(HistogramEntry {
                     color: color,
                     weight: 1,
                 });
@@ -50,7 +54,7 @@ impl Histogram {
     }
 }
 
-pub(crate )struct ColorHasher(u64);
+pub(crate) struct ColorHasher(u64);
 impl BuildHasher for ColorHasher {
     type Hasher = Self;
     #[inline(always)]
@@ -62,10 +66,16 @@ impl BuildHasher for ColorHasher {
 impl Hasher for ColorHasher {
     // Magick numbers from https://github.com/rust-lang/rustc-hash/blob/master/src/lib.rs
     #[inline(always)]
-    fn finish(&self) -> u64 { self.0.wrapping_mul(0xf1357aea2e62a9c5).rotate_left(26) }
+    fn finish(&self) -> u64 {
+        self.0.wrapping_mul(0xf1357aea2e62a9c5).rotate_left(26)
+    }
 
     #[inline(always)]
-    fn write_u64(&mut self, i: u64) { self.0 = i; }
+    fn write_u64(&mut self, i: u64) {
+        self.0 = i;
+    }
 
-    fn write(&mut self, _bytes: &[u8]) { unimplemented!() }
+    fn write(&mut self, _bytes: &[u8]) {
+        unimplemented!()
+    }
 }

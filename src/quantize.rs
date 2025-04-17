@@ -1,10 +1,10 @@
-use crate::histogram::Histogram;
 use crate::cluster::Cluster;
-use crate::palette::Palette;
+use crate::colormap::Colormap;
 use crate::error::Error;
+use crate::histogram::Histogram;
 use crate::image::Image;
 use crate::options::Options;
-use crate::colormap::Colormap;
+use crate::palette::Palette;
 
 const EMPTY_PIX: [u8; 4] = [0; 4];
 
@@ -39,7 +39,7 @@ impl QuantizeResult {
             colormap = Colormap::from_clusters(&clusters);
         }
 
-        Self{
+        Self {
             error: colormap.error,
             colormap: colormap,
             dithering_level: 1.0,
@@ -52,7 +52,7 @@ impl QuantizeResult {
     /// than 1.0 or lesser than 0.0
     pub fn set_dithering_level(&mut self, level: f32) -> Result<(), Error> {
         if level > 1.0 || level < 0.0 {
-            return Err(Error::ValueOutOfRange)
+            return Err(Error::ValueOutOfRange);
         }
 
         self.dithering_level = level;
@@ -77,7 +77,7 @@ impl QuantizeResult {
     /// than `image.width * image.height`
     pub fn remap_image(&self, image: &Image, buf: &mut [u8]) -> Result<(), Error> {
         if buf.len() < image.width * image.height {
-            return Err(Error::BufferTooSmall)
+            return Err(Error::BufferTooSmall);
         }
 
         if self.dithering_level > 0.0 {
@@ -90,10 +90,10 @@ impl QuantizeResult {
     }
 
     fn remap_image_no_dither(&self, image: &Image, buf: &mut [u8]) {
-        for point in 0..image.width*image.height {
-            let data_point = point*4;
+        for point in 0..image.width * image.height {
+            let data_point = point * 4;
 
-            let pix = pix_or_empty(&image.data[data_point..data_point+4]);
+            let pix = pix_or_empty(&image.data[data_point..data_point + 4]);
             let r = pix[0] as f32;
             let g = pix[1] as f32;
             let b = pix[2] as f32;
@@ -106,7 +106,7 @@ impl QuantizeResult {
     }
 
     fn remap_image_dither(&self, image: &Image, buf: &mut [u8]) {
-        let error_size = image.width+2;
+        let error_size = image.width + 2;
         let mut error_curr = vec![[0f32; 4]; error_size];
         let mut error_next = vec![[0f32; 4]; error_size];
 
@@ -125,22 +125,21 @@ impl QuantizeResult {
             };
 
             loop {
-                let point = image.width*y + x;
+                let point = image.width * y + x;
                 let data_point = point * 4;
 
                 let err_ind = x + 1;
-                let err_inds = match x_reverse{
+                let err_inds = match x_reverse {
                     false => [err_ind - 1, err_ind, err_ind + 1],
                     true => [err_ind + 1, err_ind, err_ind - 1],
                 };
 
                 let err_pix = &mut error_curr[err_ind];
 
-                let err_total =
-                    err_pix[0] * err_pix[0] +
-                    err_pix[1] * err_pix[1] +
-                    err_pix[2] * err_pix[2] +
-                    err_pix[3] * err_pix[3];
+                let err_total = err_pix[0] * err_pix[0]
+                    + err_pix[1] * err_pix[1]
+                    + err_pix[2] * err_pix[2]
+                    + err_pix[3] * err_pix[3];
 
                 if err_total > err_threshold {
                     err_pix[0] = err_pix[0] * 0.8;
@@ -149,7 +148,7 @@ impl QuantizeResult {
                     err_pix[3] = err_pix[3] * 0.8;
                 }
 
-                let pix = pix_or_empty(&image.data[data_point..data_point+4]);
+                let pix = pix_or_empty(&image.data[data_point..data_point + 4]);
                 let dith_pix = [
                     pix[0] as f32 + err_pix[0],
                     pix[1] as f32 + err_pix[1],
@@ -205,13 +204,13 @@ impl QuantizeResult {
 
                 if x_reverse {
                     if x <= 0 {
-                        break
+                        break;
                     }
                     x -= 1;
                 } else {
                     x += 1;
                     if x >= image.width {
-                        break
+                        break;
                     }
                 }
             }
@@ -225,7 +224,7 @@ impl QuantizeResult {
 #[inline(always)]
 fn pix_or_empty(pix: &[u8]) -> &[u8] {
     if pix[3] == 0 {
-        return &EMPTY_PIX
+        return &EMPTY_PIX;
     }
     pix
 }

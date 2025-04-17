@@ -2,9 +2,9 @@ use crate::ord_float::OrdFloat32;
 
 use crate::vpsearch;
 
-use crate::palette::Palette;
 use crate::cluster::Cluster;
 use crate::histogram::Histogram;
+use crate::palette::Palette;
 
 pub(crate) struct Colormap {
     palette: Palette,
@@ -13,7 +13,7 @@ pub(crate) struct Colormap {
 }
 
 impl Colormap {
-    pub(crate) fn from_clusters(clusters: &Vec::<Cluster>) -> Self {
+    pub(crate) fn from_clusters(clusters: &Vec<Cluster>) -> Self {
         assert!(clusters.len() <= 256);
 
         let size = clusters.len();
@@ -21,7 +21,7 @@ impl Colormap {
         let mut weights = [0f32; 256];
         let mut total_weight = 0f32;
 
-        clusters.iter().enumerate().for_each(|(i, c)|{
+        clusters.iter().enumerate().for_each(|(i, c)| {
             entries[i] = [c.mean[0], c.mean[1], c.mean[2], c.mean[3]];
 
             let weight = c.weight;
@@ -45,7 +45,7 @@ impl Colormap {
 
         tree = vpsearch::SearchTree::new(entries_sl, &weights);
 
-        Self{
+        Self {
             palette: entries[..size].into(),
             tree: tree,
             error: error,
@@ -59,8 +59,13 @@ impl Colormap {
         let mut entries = [[0f32; 4]; 256];
         let mut weights = [0f32; 256];
 
-        hist.map.values().enumerate().for_each(|(i, e)|{
-            entries[i] = [e.color[0] as f32, e.color[1] as f32, e.color[2] as f32, e.color[3] as f32];
+        hist.map.values().enumerate().for_each(|(i, e)| {
+            entries[i] = [
+                e.color[0] as f32,
+                e.color[1] as f32,
+                e.color[2] as f32,
+                e.color[3] as f32,
+            ];
             weights[i] = e.weight as f32;
         });
 
@@ -70,7 +75,7 @@ impl Colormap {
 
         let tree = vpsearch::SearchTree::new(&entries_sl, &weights);
 
-        Self{
+        Self {
             palette: entries[..size].into(),
             tree: tree,
             error: 0f32,
@@ -87,7 +92,12 @@ impl Colormap {
     }
 }
 
-fn kmeans(clusters: &Vec::<Cluster>, entries: &mut [[f32; 4]], tree: &vpsearch::SearchTree, total_weight: f32) -> (f32, [f32; 256]) {
+fn kmeans(
+    clusters: &Vec<Cluster>,
+    entries: &mut [[f32; 4]],
+    tree: &vpsearch::SearchTree,
+    total_weight: f32,
+) -> (f32, [f32; 256]) {
     let mut colors = [[0f32; 4]; 256];
     let mut weights = [0f32; 256];
 
@@ -109,7 +119,7 @@ fn kmeans(clusters: &Vec::<Cluster>, entries: &mut [[f32; 4]], tree: &vpsearch::
             add_color(color, &hist_color, weight);
 
             weights[ind as usize] += weight;
-            total_err += err*err;
+            total_err += err * err;
         }
     }
 
@@ -152,7 +162,7 @@ fn sort_colors(entries: &mut [[f32; 4]], weights: &mut [f32]) {
                 indexes[current] = current;
 
                 if indexes[target] == target {
-                    break
+                    break;
                 }
 
                 entries.swap(current, target);
@@ -200,7 +210,10 @@ fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
     }
 }
 
-#[cfg(not(any(target_arch = "x86_64", all(target_arch = "aarch64", target_feature = "neon"))))]
+#[cfg(not(any(
+    target_arch = "x86_64",
+    all(target_arch = "aarch64", target_feature = "neon")
+)))]
 #[inline(always)]
 fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
     dst[0] += src[0] * weight;

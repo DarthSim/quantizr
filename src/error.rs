@@ -12,7 +12,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ValueOutOfRange => write!(f, "Value out of range"),
-            Self::BufferTooSmall => write!(f, "Buffer is too small")
+            Self::BufferTooSmall => write!(f, "Buffer is too small"),
         }
     }
 }

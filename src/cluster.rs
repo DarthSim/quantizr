@@ -12,7 +12,7 @@ pub(crate) struct Cluster<'clust> {
 
 impl<'clust> Cluster<'clust> {
     pub(crate) fn new(entries: Vec<&'clust HistogramEntry>) -> Self {
-        let mut cluster = Self{
+        let mut cluster = Self {
             entries: entries,
             mean: [0.0; 4],
             weight: 0.0,
@@ -41,7 +41,7 @@ impl<'clust> Cluster<'clust> {
 
         if self.entries.is_empty() {
             self.chan_diff = 0.0;
-            return
+            return;
         }
 
         let mut tmp;
@@ -49,7 +49,12 @@ impl<'clust> Cluster<'clust> {
         for e in self.entries.iter() {
             let weight = e.weight as f32;
 
-            tmp = [e.color[0] as f32, e.color[1] as f32, e.color[2] as f32, e.color[3] as f32];
+            tmp = [
+                e.color[0] as f32,
+                e.color[1] as f32,
+                e.color[2] as f32,
+                e.color[3] as f32,
+            ];
             add_color(&mut self.mean, &tmp, weight);
 
             self.weight += weight;
@@ -62,14 +67,21 @@ impl<'clust> Cluster<'clust> {
 
         let mut diff_sum: [f32; 4] = [0f32; 4];
 
-        for e in self.entries.iter() {
+        for &e in self.entries.iter() {
             let weight = e.weight as f32;
 
-            tmp = [e.color[0] as f32, e.color[1] as f32, e.color[2] as f32, e.color[3] as f32];
+            tmp = [
+                e.color[0] as f32,
+                e.color[1] as f32,
+                e.color[2] as f32,
+                e.color[3] as f32,
+            ];
             add_diff(&mut diff_sum, &tmp, &self.mean, weight);
         }
 
-        let (chan, max_diff_sum) = diff_sum.iter().enumerate()
+        let (chan, max_diff_sum) = diff_sum
+            .iter()
+            .enumerate()
             .max_by(|&(_, a), &(_, b)| a.partial_cmp(&b).unwrap_or(Ordering::Equal))
             .unwrap();
 
@@ -90,14 +102,16 @@ impl<'clust> Cluster<'clust> {
             let weight_ratio = 0.75 - (clusters.len() as f32 + 1.0) / max_colors_f32 / 2.0;
 
             // Get the best cluster to split
-            let to_split_opt = clusters.iter().enumerate()
+            let to_split_opt = clusters
+                .iter()
+                .enumerate()
                 .filter(|(_, c)| c.chan_diff > 0.0)
-                .map(|(i, c)|{
+                .map(|(i, c)| {
                     let priority = c.chan_diff * c.weight.powf(weight_ratio);
                     (i, priority)
                 })
                 .max_by(|&(_, a), &(_, b)| a.partial_cmp(&b).unwrap_or(Ordering::Equal))
-                .map(|(i, _)| clusters.swap_remove(i) );
+                .map(|(i, _)| clusters.swap_remove(i));
 
             // If nothing there, this means everything is ready
             let mut to_split = match to_split_opt {
@@ -202,7 +216,10 @@ fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
     }
 }
 
-#[cfg(not(any(target_arch = "x86_64", all(target_arch = "aarch64", target_feature = "neon"))))]
+#[cfg(not(any(
+    target_arch = "x86_64",
+    all(target_arch = "aarch64", target_feature = "neon")
+)))]
 #[inline(always)]
 fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
     dst[0] += src[0] * weight;
@@ -256,7 +273,10 @@ fn add_diff(dst: &mut [f32; 4], a: &[f32; 4], b: &[f32; 4], weight: f32) {
     }
 }
 
-#[cfg(not(any(target_arch = "x86_64", all(target_arch = "aarch64", target_feature = "neon"))))]
+#[cfg(not(any(
+    target_arch = "x86_64",
+    all(target_arch = "aarch64", target_feature = "neon")
+)))]
 #[inline(always)]
 fn add_diff(dst: &mut [f32; 4], a: &[f32; 4], b: &[f32; 4], weight: f32) {
     dst[0] += (a[0] - b[0]).abs() * weight;

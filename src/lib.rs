@@ -54,26 +54,24 @@
 //! save_image2(palette, indexes2, width2, height2);
 //! ```
 
-mod ord_float;
+mod cluster;
+mod colormap;
 mod error;
+mod histogram;
 mod image;
 mod options;
-mod histogram;
-mod cluster;
-mod vpsearch;
-mod colormap;
+mod ord_float;
 mod palette;
 mod quantize;
+mod vpsearch;
 
 pub use error::Error;
-pub use image::Image;
 pub use histogram::Histogram;
+pub use image::Image;
 pub use options::Options;
 pub use palette::Color;
 pub use palette::Palette;
 pub use quantize::QuantizeResult;
 
-#[cfg(feature="capi")]
+#[cfg(feature = "capi")]
 pub mod capi;
-
-

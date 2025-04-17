@@ -1,6 +1,6 @@
 /// RGBA color
 #[repr(C)]
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
@@ -10,7 +10,12 @@ pub struct Color {
 
 impl Default for Color {
     fn default() -> Self {
-        Self{r:0, g:0, b:0, a:0}
+        Self {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
+        }
     }
 }
 
@@ -25,7 +30,7 @@ pub struct Palette {
 
 impl Default for Palette {
     fn default() -> Self {
-        Self{
+        Self {
             count: 0,
             entries: [Color::default(); 256],
         }

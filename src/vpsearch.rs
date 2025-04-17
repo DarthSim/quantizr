@@ -46,7 +46,7 @@ impl SearchNode {
         }
 
         if indexes.len() == 1 {
-            let node = Self{
+            let node = Self {
                 ind: indexes.pop().unwrap(),
                 near: None,
                 far: None,
@@ -55,30 +55,25 @@ impl SearchNode {
                 radius_sq: f32::MAX,
             };
 
-            return Some(Box::new(node))
+            return Some(Box::new(node));
         }
 
         // Find the vantage point by the maximum weight
         // and remove it from the list
-        let vp_ind = indexes.iter().enumerate()
+        let vp_ind = indexes
+            .iter()
+            .enumerate()
             .map(|(i, ind)| (i, OrdFloat32::from(weights[usize::from(ind.ind)])))
             .max_by_key(|&(_, w)| w)
             .map(|(i, _)| indexes.swap_remove(i))
             .unwrap();
 
-        indexes.sort_by_cached_key(|i| {
-            OrdFloat32::from(dist(&vp_ind.data, &i.data))
-        });
+        indexes.sort_by_cached_key(|i| OrdFloat32::from(dist(&vp_ind.data, &i.data)));
 
-        let (
-            near,
-            far,
-            rest,
-            radius_sq
-        ) = if indexes.len() < 7 {
+        let (near, far, rest, radius_sq) = if indexes.len() < 7 {
             (None, None, indexes.to_vec(), f32::MAX)
         } else {
-            let half_idx = indexes.len()/2;
+            let half_idx = indexes.len() / 2;
             let (near_indexes, far_indexes) = indexes.split_at_mut(half_idx);
             let radius_sq = dist(&vp_ind.data, &far_indexes[0].data);
 
@@ -86,12 +81,11 @@ impl SearchNode {
                 Self::new(near_indexes.to_vec().as_mut(), weights),
                 Self::new(far_indexes.to_vec().as_mut(), weights),
                 [].into(),
-                radius_sq
+                radius_sq,
             )
         };
 
-
-        let node = Self{
+        let node = Self {
             ind: vp_ind,
             near: near,
             far: far,
@@ -148,13 +142,18 @@ impl SearchTree {
         assert!(weights.len() >= data.len());
         assert!(data.len() <= 256);
 
-        let mut indexes = data.iter().enumerate().map(|(i, d)| {
-            SearchIdx{ind: i as u8, data: *d}
-        }).collect::<Vec<SearchIdx>>();
+        let mut indexes = data
+            .iter()
+            .enumerate()
+            .map(|(i, &d)| SearchIdx {
+                ind: i as u8,
+                data: d,
+            })
+            .collect::<Vec<SearchIdx>>();
 
         let root = SearchNode::new(&mut indexes, weights);
 
-        Self{ root: root}
+        Self { root: root }
     }
 
     pub(crate) fn find_nearest(&self, pin: &[f32; 4]) -> (u8, [f32; 4], f32) {
@@ -209,11 +208,14 @@ fn dist(c1: &[f32; 4], c2: &[f32; 4]) -> f32 {
     }
 }
 
-#[cfg(not(any(target_arch = "x86_64", all(target_arch = "aarch64", target_feature = "neon"))))]
+#[cfg(not(any(
+    target_arch = "x86_64",
+    all(target_arch = "aarch64", target_feature = "neon")
+)))]
 #[inline(always)]
 fn dist(c1: &[f32; 4], c2: &[f32; 4]) -> f32 {
-    (c1[0] - c2[0]).powi(2) +
-    (c1[1] - c2[1]).powi(2) +
-    (c1[2] - c2[2]).powi(2) +
-    (c1[3] - c2[3]).powi(2)
+    (c1[0] - c2[0]).powi(2)
+        + (c1[1] - c2[1]).powi(2)
+        + (c1[2] - c2[2]).powi(2)
+        + (c1[3] - c2[3]).powi(2)
 }

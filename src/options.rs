@@ -7,9 +7,7 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Self{
-            max_colors: 256,
-        }
+        Self { max_colors: 256 }
     }
 }
 
@@ -24,7 +22,7 @@ impl Options {
     /// than 256 or less than 2
     pub fn set_max_colors(&mut self, colors: i32) -> Result<(), Error> {
         if colors > 256 || colors < 2 {
-            return Err(Error::ValueOutOfRange)
+            return Err(Error::ValueOutOfRange);
         }
 
         self.max_colors = colors;
