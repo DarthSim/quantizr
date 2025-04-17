@@ -3,7 +3,7 @@ name = "quantizr"
 description = "Fast library for converting RGBA images to 8-bit palette images"
 version = "1.4.2"
 authors = ["DarthSim <darthsim@gmail.com>"]
-edition = "2018"
+edition = "2024"
 license-file = "LICENSE"
 repository="https://github.com/DarthSim/quantizr"
 
