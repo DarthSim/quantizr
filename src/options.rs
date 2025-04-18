@@ -21,7 +21,7 @@ impl Options {
     /// Returns [`Error::ValueOutOfRange`] if the provided number is greater
     /// than 256 or less than 2
     pub fn set_max_colors(&mut self, colors: i32) -> Result<(), Error> {
-        if colors > 256 || colors < 2 {
+        if !(2..=256).contains(&colors) {
             return Err(Error::ValueOutOfRange);
         }
 

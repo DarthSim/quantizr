@@ -18,9 +18,9 @@ impl<'data> Image<'data> {
         }
 
         Ok(Self {
-            data: data,
-            width: width,
-            height: height,
+            data,
+            width,
+            height,
         })
     }
 }

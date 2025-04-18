@@ -25,7 +25,7 @@ impl Histogram {
     pub fn add_image(&mut self, image: &Image) {
         let size = image.width * image.height;
 
-        let to_reserve = if self.map.len() == 0 {
+        let to_reserve = if self.map.is_empty() {
             size / 7
         } else {
             size / 21
@@ -46,11 +46,14 @@ impl Histogram {
             self.map
                 .entry(key)
                 .and_modify(|e| e.weight = e.weight.saturating_add(1))
-                .or_insert(HistogramEntry {
-                    color: color,
-                    weight: 1,
-                });
+                .or_insert(HistogramEntry { color, weight: 1 });
         }
+    }
+}
+
+impl Default for Histogram {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

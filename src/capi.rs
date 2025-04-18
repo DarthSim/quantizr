@@ -1,3 +1,5 @@
+#![allow(clippy::missing_safety_doc)]
+
 use std::slice;
 
 use crate::error::Error;
@@ -119,10 +121,10 @@ pub unsafe extern "C" fn quantizr_remap(
     buffer: *mut u8,
     buffer_size: usize,
 ) -> QuantizrError {
-    let mut buf = unsafe { slice::from_raw_parts_mut(buffer, buffer_size) };
+    let buf = unsafe { slice::from_raw_parts_mut(buffer, buffer_size) };
 
     result
-        .remap_image(image, &mut buf)
+        .remap_image(image, buf)
         .err()
         .map_or(QuantizrError::QuantizrOk, |e| e.into())
 }

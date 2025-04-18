@@ -47,8 +47,8 @@ impl Colormap {
 
         Self {
             palette: entries[..size].into(),
-            tree: tree,
-            error: error,
+            tree,
+            error,
         }
     }
 
@@ -73,11 +73,11 @@ impl Colormap {
 
         sort_colors(entries_sl, &mut weights);
 
-        let tree = vpsearch::SearchTree::new(&entries_sl, &weights);
+        let tree = vpsearch::SearchTree::new(entries_sl, &weights);
 
         Self {
             palette: entries[..size].into(),
-            tree: tree,
+            tree,
             error: 0f32,
         }
     }
@@ -132,7 +132,7 @@ fn kmeans(
         }
     }
 
-    return (total_err / total_weight, weights);
+    (total_err / total_weight, weights)
 }
 
 fn round_and_clamp_colors(entries: &mut [[f32; 4]]) {

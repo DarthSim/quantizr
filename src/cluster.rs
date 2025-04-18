@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use crate::ord_float::OrdFloat32;
 
 use crate::histogram::{Histogram, HistogramEntry};
 
@@ -13,7 +13,7 @@ pub(crate) struct Cluster<'clust> {
 impl<'clust> Cluster<'clust> {
     pub(crate) fn new(entries: Vec<&'clust HistogramEntry>) -> Self {
         let mut cluster = Self {
-            entries: entries,
+            entries,
             mean: [0.0; 4],
             weight: 0.0,
             chan_diff: 0.0,
@@ -82,7 +82,7 @@ impl<'clust> Cluster<'clust> {
         let (chan, max_diff_sum) = diff_sum
             .iter()
             .enumerate()
-            .max_by(|&(_, a), &(_, b)| a.partial_cmp(&b).unwrap_or(Ordering::Equal))
+            .max_by_key(|&(_, &d)| OrdFloat32::from(d))
             .unwrap();
 
         self.chan_diff = max_diff_sum / self.weight;
@@ -110,7 +110,7 @@ impl<'clust> Cluster<'clust> {
                     let priority = c.chan_diff * c.weight.powf(weight_ratio);
                     (i, priority)
                 })
-                .max_by(|&(_, a), &(_, b)| a.partial_cmp(&b).unwrap_or(Ordering::Equal))
+                .max_by_key(|&(_, p)| OrdFloat32::from(p))
                 .map(|(i, _)| clusters.swap_remove(i));
 
             // If nothing there, this means everything is ready

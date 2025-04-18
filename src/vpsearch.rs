@@ -87,11 +87,11 @@ impl SearchNode {
 
         let node = Self {
             ind: vp_ind,
-            near: near,
-            far: far,
-            rest: rest,
+            near,
+            far,
+            rest,
             radius: radius_sq.sqrt(),
-            radius_sq: radius_sq,
+            radius_sq,
         };
 
         Some(Box::new(node))
@@ -153,7 +153,7 @@ impl SearchTree {
 
         let root = SearchNode::new(&mut indexes, weights);
 
-        Self { root: root }
+        Self { root }
     }
 
     pub(crate) fn find_nearest(&self, pin: &[f32; 4]) -> (u8, [f32; 4], f32) {
