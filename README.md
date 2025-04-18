@@ -1,6 +1,6 @@
 # Quantizr
 
-[![Crates.io](https://img.shields.io/crates/v/quantizr?style=for-the-badge)](https://crates.io/crates/quantizr) [![docs.rs](https://img.shields.io/docsrs/quantizr?style=for-the-badge)](https://docs.rs/quantizr)
+[![Crates.io](https://img.shields.io/crates/v/quantizr?style=for-the-badge)](https://crates.io/crates/quantizr) [![docs.rs](https://img.shields.io/docsrs/quantizr?style=for-the-badge)](https://docs.rs/quantizr) [![GH Actions](https://img.shields.io/github/actions/workflow/status/DarthSim/quantizr/ci.yml?branch=master&label=CI&style=for-the-badge)](https://github.com/DarthSim/quantizr/actions)
 
 Fast library for converting RGBA images to 8-bit palette images. Written in Rust; can be used in C programs.
 
