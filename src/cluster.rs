@@ -1,3 +1,7 @@
+use alloc::vec::Vec;
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
+
 use crate::ord_float::OrdFloat32;
 
 use crate::histogram::{Histogram, HistogramEntry};
@@ -186,7 +190,7 @@ impl<'clust> Cluster<'clust> {
 #[inline(always)]
 fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
     unsafe {
-        use std::arch::x86_64::*;
+        use core::arch::x86_64::*;
 
         let mut psrc = _mm_loadu_ps(src.as_ptr());
         let mut pdst = _mm_loadu_ps(dst.as_ptr());
@@ -203,7 +207,7 @@ fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
 #[inline(always)]
 fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
     unsafe {
-        use std::arch::aarch64::*;
+        use core::arch::aarch64::*;
 
         let mut psrc = vld1q_f32(src.as_ptr());
         let mut pdst = vld1q_f32(dst.as_ptr());
@@ -232,7 +236,7 @@ fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
 #[inline(always)]
 fn add_diff(dst: &mut [f32; 4], a: &[f32; 4], b: &[f32; 4], weight: f32) {
     unsafe {
-        use std::arch::x86_64::*;
+        use core::arch::x86_64::*;
 
         let pa = _mm_loadu_ps(a.as_ptr());
         let pb = _mm_loadu_ps(b.as_ptr());
@@ -256,7 +260,7 @@ fn add_diff(dst: &mut [f32; 4], a: &[f32; 4], b: &[f32; 4], weight: f32) {
 #[inline(always)]
 fn add_diff(dst: &mut [f32; 4], a: &[f32; 4], b: &[f32; 4], weight: f32) {
     unsafe {
-        use std::arch::aarch64::*;
+        use core::arch::aarch64::*;
 
         let pa = vld1q_f32(a.as_ptr());
         let pb = vld1q_f32(b.as_ptr());

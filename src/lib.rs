@@ -1,5 +1,8 @@
 //! Fast library for conversion of RGBA images to 8-bit paletted images.
 //!
+//! This crate supports `no_std` environments with the `alloc` crate.
+//! Disable the default `std` feature to use in `no_std` mode.
+//!
 //! ### Quantizing an image
 //!
 //! ```
@@ -53,6 +56,10 @@
 //! save_image1(palette, indexes1, width1, height1);
 //! save_image2(palette, indexes2, width2, height2);
 //! ```
+
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
 
 mod cluster;
 mod colormap;

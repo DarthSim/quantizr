@@ -1,4 +1,4 @@
-use std::fmt;
+use core::fmt;
 
 #[non_exhaustive]
 pub enum Error {
@@ -23,4 +23,4 @@ impl fmt::Debug for Error {
     }
 }
 
-impl std::error::Error for Error {}
+impl core::error::Error for Error {}

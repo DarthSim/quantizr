@@ -1,3 +1,6 @@
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
+
 /// RGBA color
 #[repr(C)]
 #[derive(Clone, Copy, Default)]

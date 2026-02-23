@@ -1,3 +1,8 @@
+use alloc::boxed::Box;
+use alloc::vec::Vec;
+#[cfg(not(feature = "std"))]
+use num_traits::Float;
+
 use crate::ord_float::OrdFloat32;
 
 #[derive(Clone)]
@@ -115,19 +120,19 @@ impl SearchNode {
             if let Some(near) = &self.near {
                 near.visit(pin, nearest);
             }
-            if distance_sq.sqrt() >= self.radius - nearest.distance {
-                if let Some(far) = &self.far {
-                    far.visit(pin, nearest);
-                }
+            if distance_sq.sqrt() >= self.radius - nearest.distance
+                && let Some(far) = &self.far
+            {
+                far.visit(pin, nearest);
             }
         } else {
             if let Some(far) = &self.far {
                 far.visit(pin, nearest);
             }
-            if distance_sq.sqrt() <= self.radius + nearest.distance {
-                if let Some(near) = &self.near {
-                    near.visit(pin, nearest);
-                }
+            if distance_sq.sqrt() <= self.radius + nearest.distance
+                && let Some(near) = &self.near
+            {
+                near.visit(pin, nearest);
             }
         }
     }
@@ -177,7 +182,7 @@ impl SearchTree {
 #[inline(always)]
 fn dist(c1: &[f32; 4], c2: &[f32; 4]) -> f32 {
     unsafe {
-        use std::arch::x86_64::*;
+        use core::arch::x86_64::*;
 
         let pc1 = _mm_loadu_ps(c1.as_ptr());
         let pc2 = _mm_loadu_ps(c2.as_ptr());
@@ -196,7 +201,7 @@ fn dist(c1: &[f32; 4], c2: &[f32; 4]) -> f32 {
 #[inline(always)]
 fn dist(c1: &[f32; 4], c2: &[f32; 4]) -> f32 {
     unsafe {
-        use std::arch::aarch64::*;
+        use core::arch::aarch64::*;
 
         let pc1 = vld1q_f32(c1.as_ptr());
         let pc2 = vld1q_f32(c2.as_ptr());

@@ -1,3 +1,6 @@
+use alloc::vec;
+use core::mem;
+
 use crate::cluster::Cluster;
 use crate::colormap::Colormap;
 use crate::error::Error;
@@ -200,7 +203,7 @@ impl QuantizeResult {
                 err[3] += err_a * 7.0;
             }
 
-            std::mem::swap(&mut error_curr, &mut error_next);
+            mem::swap(&mut error_curr, &mut error_next);
             error_next.fill_with(|| [0f32; 4]);
         }
     }

@@ -1,6 +1,7 @@
 #![allow(clippy::missing_safety_doc)]
 
-use std::slice;
+use alloc::boxed::Box;
+use core::slice;
 
 use crate::error::Error;
 use crate::histogram::Histogram;
@@ -17,7 +18,7 @@ pub enum QuantizrError {
     QuantizrBufferTooSmall = 1,
 }
 
-impl std::convert::From<Error> for QuantizrError {
+impl From<Error> for QuantizrError {
     fn from(error: Error) -> Self {
         match error {
             Error::ValueOutOfRange => Self::QuantizrValueOutOfRange,
@@ -131,20 +132,20 @@ pub unsafe extern "C" fn quantizr_remap(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn quantizr_free_result(result: Box<QuantizeResult>) {
-    std::mem::drop(result)
+    drop(result)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn quantizr_free_histogram(hist: Box<Histogram>) {
-    std::mem::drop(hist)
+    drop(hist)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn quantizr_free_image(image: Box<Image>) {
-    std::mem::drop(image)
+    drop(image)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn quantizr_free_options(options: Box<Options>) {
-    std::mem::drop(options)
+    drop(options)
 }

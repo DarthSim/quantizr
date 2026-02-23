@@ -1,5 +1,9 @@
+use core::hash::{BuildHasher, Hasher};
+
+#[cfg(feature = "std")]
 use std::collections::HashMap;
-use std::hash::{BuildHasher, Hasher};
+#[cfg(not(feature = "std"))]
+use hashbrown::HashMap;
 
 use crate::image::Image;
 
