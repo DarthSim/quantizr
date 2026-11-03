@@ -254,54 +254,63 @@ fn add_diff(dst: &mut [f32; 4], a: &[f32; 4], b: &[f32; 4], weight: f32) {
 #[cfg(test)]
 mod tests {
     use super::Cluster;
-    use crate::histogram::{Histogram, HistogramEntry};
-    use crate::{Options, QuantizeResult};
+    use crate::histogram::HistogramEntry;
 
-    fn histogram(colors: &[([u8; 4], u32)]) -> Histogram {
-        let mut hist = Histogram::new();
-        hist.map.reserve(512 * 512 / 7);
-        for &(color, weight) in colors {
-            let key = u32::from_le_bytes(color) as u64;
-            hist.map.insert(key, HistogramEntry { color, weight });
-        }
-        hist
-    }
-
-    fn quantize(hist: &Histogram, max_colors: i32) -> usize {
-        let mut opts = Options::default();
-        opts.set_max_colors(max_colors).unwrap();
-        let count = QuantizeResult::quantize_histogram(hist, &opts)
-            .get_palette()
-            .count;
-        assert!((1..=max_colors as usize).contains(&(count as usize)));
-        count as usize
-    }
-
-    fn assert_means_within_values(clusters: &[Cluster]) {
-        for c in clusters {
-            for ch in 0..4 {
-                let (min, max) = c.entries.iter().fold((u8::MAX, u8::MIN), |(min, max), e| {
-                    (min.min(e.color[ch]), max.max(e.color[ch]))
+    fn assert_means_within_values(cluster: &Cluster) {
+        let (min_col, max_col) =
+            cluster
+                .entries
+                .iter()
+                .fold(([u8::MAX; 4], [u8::MIN; 4]), |(min, max), e| {
+                    let mut min = min;
+                    let mut max = max;
+                    for ch in 0..4 {
+                        min[ch] = min[ch].min(e.color[ch]);
+                        max[ch] = max[ch].max(e.color[ch]);
+                    }
+                    (min, max)
                 });
-                let mean = c.mean[ch];
-                assert!(
-                    (min as f32..=max as f32).contains(&mean),
-                    "channel {ch} mean {mean} outside {min}..={max}"
-                );
-                if min == max {
-                    assert_eq!(mean, min as f32, "channel {ch} mean of equal values");
-                }
+
+        let iter = cluster.mean.iter().zip(min_col).zip(max_col).enumerate();
+        for (ch, ((mean, min), max)) in iter {
+            assert!(
+                (min as f32..=max as f32).contains(mean),
+                "channel {ch} mean {mean} outside {min}..={max}"
+            );
+            if min == max {
+                assert_eq!(*mean, min as f32, "channel {ch} mean of equal values");
             }
-            if c.entries.iter().all(|e| e.color == c.entries[0].color) {
-                assert_eq!(c.chan_diff, 0.0);
-            }
+        }
+
+        if min_col == max_col {
+            assert_eq!(cluster.chan_diff, 0.0);
         }
     }
 
-    // 512x512 tile that used to panic in `split`
+    fn split_and_check(entries: &[HistogramEntry], total_weight: f32, max_colors: usize) {
+        let root = Cluster::new(entries.iter().collect());
+        assert_eq!(root.weight, total_weight);
+
+        // Split the root cluster into smaller clusters and check each one
+        let clusters = root.split_into(max_colors);
+        assert!((1..=max_colors).contains(&clusters.len()));
+
+        for cluster in &clusters {
+            assert_means_within_values(cluster);
+        }
+    }
+
+    fn histogram_entries(colors: &[([u8; 4], u32)]) -> Vec<HistogramEntry> {
+        colors
+            .iter()
+            .map(|&(color, weight)| HistogramEntry { color, weight })
+            .collect()
+    }
+
+    /// Test with a known near-uniform static histogram that used to panic in `split`
     #[test]
-    fn near_uniform_tile() {
-        let hist = histogram(&[
+    fn near_uniform_static() {
+        let hist = histogram_entries(&[
             ([250, 246, 240, 255], 261911),
             ([251, 248, 243, 255], 193),
             ([249, 244, 237, 255], 6),
@@ -321,11 +330,13 @@ mod tests {
             ([250, 246, 242, 255], 1),
             ([251, 248, 242, 255], 1),
         ]);
-        quantize(&hist, 16);
+        let total_weight: f32 = hist.iter().map(|entry| entry.weight as f32).sum();
+        split_and_check(&hist, total_weight, 16);
     }
 
+    /// Test with a dynamically generated near-uniform histogram
     #[test]
-    fn near_uniform_large_images() {
+    fn near_uniform_dynamic() {
         let shades: [([u8; 4], u32); 5] = [
             ([251, 248, 243, 255], 193),
             ([249, 244, 237, 255], 6),
@@ -339,25 +350,17 @@ mod tests {
             let mut colors = vec![([250, 246, 240, 255], side * side - shaded)];
             colors.extend(shades.iter().map(|&(c, w)| (c, w * scale)));
 
-            let entries: Vec<HistogramEntry> = colors
-                .iter()
-                .map(|&(color, weight)| HistogramEntry { color, weight })
-                .collect();
-            let root = Cluster::new(entries.iter().collect());
-            assert_eq!(root.mean[3], 255.0);
-            assert_eq!(root.weight, (side * side) as f32);
-            assert_means_within_values(std::slice::from_ref(&root));
+            let hist = histogram_entries(&colors);
 
             for max_colors in [2, 4, 16, 128, 256] {
-                let clusters = Cluster::new(entries.iter().collect()).split_into(max_colors);
-                assert_means_within_values(&clusters);
-                quantize(&histogram(&colors), max_colors as i32);
+                split_and_check(&hist, (side * side) as f32, max_colors);
             }
         }
     }
 
+    /// Test with a randomly generated near-uniform histogram
     #[test]
-    fn near_uniform_random_large() {
+    fn near_uniform_random() {
         let mut seed: u64 = 0x1a26e;
         let mut rand = |n: u32| {
             seed = seed
@@ -366,8 +369,11 @@ mod tests {
             ((seed >> 33) as u32) % n
         };
 
+        const SIDE_OPTIONS: [u32; 4] = [512, 1024, 2048, 4096];
+        const MAX_COLORS_OPTIONS: [usize; 5] = [2, 4, 16, 128, 256];
+
         for _ in 0..300 {
-            let side = [512, 1024, 2048, 4096][rand(4) as usize];
+            let side = SIDE_OPTIONS[rand(4) as usize];
             let base = [rand(256) as u8, rand(256) as u8, rand(256) as u8, 255];
             let mut colors = vec![];
             let mut shaded = 0;
@@ -390,14 +396,9 @@ mod tests {
                 same
             });
 
-            let entries: Vec<HistogramEntry> = colors
-                .iter()
-                .map(|&(color, weight)| HistogramEntry { color, weight })
-                .collect();
-            let max_colors = [2, 4, 16, 128, 256][rand(5) as usize];
-            let clusters = Cluster::new(entries.iter().collect()).split_into(max_colors);
-            assert_means_within_values(&clusters);
-            quantize(&histogram(&colors), max_colors as i32);
+            let hist: Vec<HistogramEntry> = histogram_entries(&colors);
+            let max_colors = MAX_COLORS_OPTIONS[rand(5) as usize];
+            split_and_check(&hist, (side * side) as f32, max_colors);
         }
     }
 }
