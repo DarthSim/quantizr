@@ -2,7 +2,7 @@ use crate::ord_float::OrdFloat32;
 
 use crate::vpsearch;
 
-use crate::cluster::Cluster;
+use crate::cluster::{Cluster, add_weighted, weighted_mean};
 use crate::histogram::Histogram;
 use crate::palette::Palette;
 
@@ -98,8 +98,8 @@ fn kmeans(
     tree: &vpsearch::SearchTree,
     total_weight: f32,
 ) -> (f32, [f32; 256]) {
-    let mut colors = [[0f32; 4]; 256];
-    let mut weights = [0f32; 256];
+    let mut sums = [[0u64; 4]; 256];
+    let mut sum_weights = [0u64; 256];
 
     let mut total_err = 0f32;
 
@@ -111,24 +111,26 @@ fn kmeans(
                 entry.color[2] as f32,
                 entry.color[3] as f32,
             ];
-            let weight = entry.weight as f32;
 
             let (ind, _, err) = tree.find_nearest(&hist_color);
 
-            let color = &mut colors[usize::from(ind)];
-            add_color(color, &hist_color, weight);
-
-            weights[ind as usize] += weight;
+            add_weighted(&mut sums[usize::from(ind)], &entry.color, entry.weight);
+            sum_weights[usize::from(ind)] += u64::from(entry.weight);
             total_err += err * err;
         }
     }
 
-    for ((ec, c), weight) in entries.iter_mut().zip(colors).zip(weights) {
-        if weight > 0.0 {
-            ec[0] = c[0] / weight;
-            ec[1] = c[1] / weight;
-            ec[2] = c[2] / weight;
-            ec[3] = c[3] / weight;
+    let mut weights = [0f32; 256];
+
+    for (((ec, sum), sum_weight), weight) in entries
+        .iter_mut()
+        .zip(&sums)
+        .zip(sum_weights)
+        .zip(weights.iter_mut())
+    {
+        if sum_weight > 0 {
+            *ec = weighted_mean(sum, sum_weight);
+            *weight = sum_weight as f32;
         }
     }
 
@@ -174,50 +176,4 @@ fn sort_colors(entries: &mut [[f32; 4]], weights: &mut [f32]) {
     }
 
     // entries.sort_unstable_by_key(|e| OrdFloat32::from(e[3]));
-}
-
-#[cfg(target_arch = "x86_64")]
-#[inline(always)]
-fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
-    unsafe {
-        use std::arch::x86_64::*;
-
-        let mut psrc = _mm_loadu_ps(src.as_ptr());
-        let mut pdst = _mm_loadu_ps(dst.as_ptr());
-        let pweights = _mm_set1_ps(weight);
-
-        psrc = _mm_mul_ps(psrc, pweights);
-        pdst = _mm_add_ps(pdst, psrc);
-
-        _mm_storeu_ps(dst.as_mut_ptr(), pdst);
-    }
-}
-
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-#[inline(always)]
-fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
-    unsafe {
-        use std::arch::aarch64::*;
-
-        let mut psrc = vld1q_f32(src.as_ptr());
-        let mut pdst = vld1q_f32(dst.as_ptr());
-        let pweights = vmovq_n_f32(weight);
-
-        psrc = vmulq_f32(psrc, pweights);
-        pdst = vaddq_f32(pdst, psrc);
-
-        vst1q_f32(dst.as_mut_ptr(), pdst);
-    }
-}
-
-#[cfg(not(any(
-    target_arch = "x86_64",
-    all(target_arch = "aarch64", target_feature = "neon")
-)))]
-#[inline(always)]
-fn add_color(dst: &mut [f32; 4], src: &[f32; 4], weight: f32) {
-    dst[0] += src[0] * weight;
-    dst[1] += src[1] * weight;
-    dst[2] += src[2] * weight;
-    dst[3] += src[3] * weight;
 }
